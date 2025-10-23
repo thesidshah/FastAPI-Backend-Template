@@ -15,12 +15,12 @@ Use this checklist before publishing the repository.
 ## Code Quality
 
 - [x] All tests passing (`pytest`)
-- [ ] Code properly linted (`ruff check`)
-- [ ] Code properly formatted (`black`)
-- [ ] Type checking passes (`mypy src`)
-- [ ] No commented-out code blocks
-- [ ] No debug print statements
-- [ ] Documentation strings are complete
+- [x] Code properly linted (`ruff check`)
+- [x] Code properly formatted (`black`)
+- [x] Type checking passes (`mypy src`)
+- [x] No commented-out code blocks
+- [x] No debug print statements
+- [x] Documentation strings are complete
 
 ## Documentation
 
@@ -37,7 +37,7 @@ Use this checklist before publishing the repository.
 
 ### GitHub Repository
 
-- [ ] Create new public repository
+- [x] Create new public repository
 - [ ] Add repository description
 - [ ] Add topics/tags: `fastapi`, `python`, `starter-template`, `api`, `async`
 - [ ] Set up branch protection for `main`
