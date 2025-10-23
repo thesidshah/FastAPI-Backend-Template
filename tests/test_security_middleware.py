@@ -2,6 +2,7 @@
 Comprehensive tests for security middleware.
 """
 
+
 import pytest
 from app.middleware.security import (
     ContentValidationMiddleware,
@@ -81,8 +82,7 @@ class TestContentValidationMiddleware:
     def test_payload_size_limit(self, app, client):
         """Test payload size limits."""
         app.add_middleware(
-            ContentValidationMiddleware,
-            size_limits={"/api/": 100},  # 100 bytes limit
+            ContentValidationMiddleware, size_limits={"/api/": 100},  # 100 bytes limit
         )
 
         # Small payload - should pass
@@ -93,9 +93,7 @@ class TestContentValidationMiddleware:
         # Large payload - should be rejected
         large_data = {"test": "x" * 200}
         response = client.post(
-            "/api/test",
-            json=large_data,
-            headers={"Content-Length": "250"},
+            "/api/test", json=large_data, headers={"Content-Length": "250"},
         )
         assert response.status_code == 413
         assert "Payload too large" in response.json()["error"]
@@ -115,9 +113,7 @@ class TestContentValidationMiddleware:
 
         # Invalid content type
         response = client.post(
-            "/api/test",
-            data="test",
-            headers={"Content-Type": "application/xml"},
+            "/api/test", content="test", headers={"Content-Type": "application/xml"},
         )
         assert response.status_code == 415
 
@@ -135,9 +131,7 @@ class TestRateLimitMiddleware:
     def test_simple_rate_limit(self, app):
         """Test in-memory rate limiting."""
         app.add_middleware(
-            SimpleRateLimitMiddleware,
-            requests_per_minute=5,
-            burst_size=0,
+            SimpleRateLimitMiddleware, requests_per_minute=5, burst_size=0,
         )
         client = TestClient(app)
 
@@ -156,8 +150,7 @@ class TestRateLimitMiddleware:
     def test_excluded_paths(self, app):
         """Test that excluded paths bypass rate limiting."""
         app.add_middleware(
-            SimpleRateLimitMiddleware,
-            requests_per_minute=1,
+            SimpleRateLimitMiddleware, requests_per_minute=1, 
             excluded_paths={"/health"},
         )
         client = TestClient(app)
@@ -170,9 +163,7 @@ class TestRateLimitMiddleware:
     def test_rate_limit_with_burst(self, app):
         """Test rate limiting with burst allowance."""
         app.add_middleware(
-            SimpleRateLimitMiddleware,
-            requests_per_minute=5,
-            burst_size=5,
+            SimpleRateLimitMiddleware, requests_per_minute=5, burst_size=5,
         )
         client = TestClient(app)
 
@@ -196,8 +187,7 @@ class TestProxyHeadersMiddleware:
 
         # Headers from untrusted proxy should be ignored
         response = client.get(
-            "/health",
-            headers={"X-Forwarded-For": "10.0.0.1", "X-Real-IP": "10.0.0.2"},
+            "/health", headers={"X-Forwarded-For": "10.0.0.1", "X-Real-IP": "10.0.0.2"},
         )
         assert response.status_code == 200
 
@@ -236,9 +226,7 @@ class TestMiddlewareIntegration:
         # Test large payload
         large_data = {"data": "x" * 2000000}
         response = client.post(
-            "/api/test",
-            json=large_data,
-            headers={"Content-Length": "2000000"},
+            "/api/test", json=large_data, headers={"Content-Length": "2000000"},
         )
         assert response.status_code == 413
 
@@ -248,10 +236,10 @@ class TestMiddlewareIntegration:
         # Add content validation first, then rate limiter, so rate limiter runs first
         app.add_middleware(ContentValidationMiddleware, size_limits={"/api/": 100})
         app.add_middleware(
-            SimpleRateLimitMiddleware,
-            requests_per_minute=2,
-            burst_size=0,
-        )
+                            SimpleRateLimitMiddleware,
+                            requests_per_minute=2,
+                            burst_size=0,
+                            )
 
         client = TestClient(app)
 
@@ -263,9 +251,7 @@ class TestMiddlewareIntegration:
 
         # Next request should hit rate limit before content validation
         response = client.post(
-            "/api/test",
-            json={"x": "y"},
-            headers={"Content-Length": "1000"},
+            "/api/test", json={"x": "y"}, headers={"Content-Length": "1000"},
         )
         assert response.status_code == 429  # Rate limit, not content validation
 
@@ -280,17 +266,16 @@ class TestSecurityScenarios:
 
         # Attempt to send large payload
         response = client.post(
-            "/api/test",
-            json={"data": "x" * 10000},
-            headers={"Content-Length": "10000"},
+            "/api/test", json={"data": "x" * 10000},
+              headers={"Content-Length": "10000"},
         )
         assert response.status_code == 413
 
     def test_prevents_rapid_requests(self, app):
         """Test protection against rapid request attacks."""
-        app.add_middleware(
-            SimpleRateLimitMiddleware, requests_per_minute=10, burst_size=0
-        )
+        app.add_middleware(SimpleRateLimitMiddleware, 
+                           requests_per_minute=10, 
+                           burst_size=0)
         client = TestClient(app)
 
         # Attempt rapid requests - first 10 should pass, then get rate limited
@@ -313,7 +298,7 @@ class TestSecurityScenarios:
 
         client = TestClient(app)
 
-        # Attempt null byte injection
+        # Attempt null byte injection 
         # (simulated in headers since URL encoding is tricky)
         response = client.post("/api/test", json={"test": "data"})
         assert response.status_code == 200

@@ -40,7 +40,7 @@ class TestAlertingMiddlewareThresholds:
         middleware = AlertingMiddleware(app, alert_threshold={"rate_limit": 3})
         middleware.alert_dispatcher.dispatch = capture_dispatch
         app.add_middleware(
-            lambda app, **kwargs: middleware.__class__(app, **kwargs),
+            AlertingMiddleware,
             alert_threshold={"rate_limit": 3},
         )
 
@@ -165,7 +165,8 @@ class TestAlertingMiddlewareCooldown:
             dispatched_alerts.append(payload)
 
         middleware = AlertingMiddleware(app, alert_threshold={"rate_limit": 2})
-        middleware.alert_cooldown = 0.1  # 100ms cooldown for testing
+        # Set a short cooldown (0.1s) for testing; use setattr to avoid static type checks
+        setattr(middleware, "alert_cooldown", 0.1)
         middleware.alert_dispatcher.dispatch = capture_dispatch
 
         mock_request = Mock()
