@@ -11,10 +11,11 @@ RUN apt-get update && \
     gcc \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy dependency files
-COPY pyproject.toml .
+# Copy project metadata and sources required for packaging
+COPY pyproject.toml README.md ./
+COPY src ./src
 
-# Install dependencies
+# Install dependencies and the project itself
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir hatchling && \
     pip install --no-cache-dir .
