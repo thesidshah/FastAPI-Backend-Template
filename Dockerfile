@@ -1,7 +1,7 @@
 # Multi-stage build for production FastAPI application
 
 # Stage 1: Builder
-FROM python:3.11-slim as builder
+FROM python:3.11-slim AS builder
 
 WORKDIR /build
 
@@ -16,7 +16,7 @@ COPY pyproject.toml README.md ./
 COPY src ./src
 
 # Install dependencies and the project itself
-RUN pip install --no-cache-dir --upgrade "pip>=25.2.1" && \
+RUN pip install --no-cache-dir --upgrade "pip>=25.2" "setuptools>=78.1.1" && \
     pip install --no-cache-dir hatchling && \
     pip install --no-cache-dir .
 
