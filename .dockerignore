@@ -1,0 +1,56 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# Build
+build/
+dist/
+*.egg-info/
+
+# Environment
+.env
+.env.local
+
+# Cache
+.uv-cache/
+.ruff_cache/
+.mypy_cache/
+
+# Git
+.git/
+.gitignore
+
+# Documentation (if large)
+docs/
+
+# Tests (optional - include if you want to run tests in container)
+# tests/
+
+# Examples
+examples/
+
+# Development files
+README_ORIGINAL.md
