@@ -23,6 +23,9 @@ RUN pip install --no-cache-dir --upgrade "pip>=25.2" "setuptools>=78.1.1" && \
 # Stage 2: Runtime
 FROM python:3.11-slim
 
+# Upgrade pip and setuptools to fix security vulnerabilities
+RUN pip install --no-cache-dir --upgrade "pip>=25.2" "setuptools>=78.1.1"
+
 # Create non-root user
 RUN useradd -m -u 1000 appuser && \
     mkdir -p /app && \
