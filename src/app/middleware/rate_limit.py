@@ -14,6 +14,8 @@ import structlog
 logger = structlog.get_logger(__name__)
 
 try:
+    from typing import Any
+
     from redis.asyncio import Redis
     from redis.exceptions import RedisError
 
@@ -65,7 +67,7 @@ if REDIS_AVAILABLE:
         def __init__(
             self,
             app: ASGIApp,
-            redis_client: Redis,
+            redis_client: Redis[bytes],
             default_limit: int = 60,
             window_seconds: int = 60,
             key_prefix: str = "rate_limit",
@@ -186,7 +188,7 @@ if REDIS_AVAILABLE:
 
             # Load script if not cached
             if not self._script_sha:
-                self._script_sha = await self.redis.script_load(self.LUA_SCRIPT)
+                self._script_sha = await self.redis.script_load(self.LUA_SCRIPT)  # type: ignore[no-untyped-call]
 
             script_sha = self._script_sha
             assert script_sha is not None, "Script SHA should be loaded"
@@ -209,7 +211,7 @@ if REDIS_AVAILABLE:
 
             except RedisError:
                 # Script not in cache, reload it
-                self._script_sha = await self.redis.script_load(self.LUA_SCRIPT)
+                self._script_sha = await self.redis.script_load(self.LUA_SCRIPT)  # type: ignore[no-untyped-call]
                 return await self._check_rate_limit(client_id, limit, path)
 
         def _get_client_id(self, request: Request) -> str:
