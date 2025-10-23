@@ -1,8 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import AsyncIterator, Callable
-from contextlib import asynccontextmanager
-from typing import AsyncContextManager
+from contextlib import AbstractAsyncContextManager, asynccontextmanager
 
 import structlog
 from fastapi import FastAPI
@@ -12,7 +11,7 @@ from .config import AppSettings
 
 def build_lifespan(
     settings: AppSettings,
-) -> Callable[[FastAPI], AsyncContextManager[None]]:
+) -> Callable[[FastAPI], AbstractAsyncContextManager[None]]:
     logger = structlog.get_logger("app.lifespan")
 
     @asynccontextmanager

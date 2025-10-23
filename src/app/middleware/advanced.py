@@ -246,7 +246,9 @@ class CircuitBreakerMiddleware(BaseHTTPMiddleware):
 
                 if self.states[endpoint] == "open":
                     return Response(
-                        content=json.dumps({"error": "Service temporarily unavailable"}),
+                        content=json.dumps(
+                            {"error": "Service temporarily unavailable"},
+                        ),
                         status_code=503,
                         media_type="application/json",
                     )

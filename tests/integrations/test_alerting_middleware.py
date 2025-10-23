@@ -165,8 +165,8 @@ class TestAlertingMiddlewareCooldown:
             dispatched_alerts.append(payload)
 
         middleware = AlertingMiddleware(app, alert_threshold={"rate_limit": 2})
-        # Set a short cooldown (0.1s) for testing; use setattr to avoid static type checks
-        setattr(middleware, "alert_cooldown", 0.1)
+        # Set a short cooldown (0.1s) for testing
+        middleware.alert_cooldown = 0.1  # type: ignore[misc]
         middleware.alert_dispatcher.dispatch = capture_dispatch
 
         mock_request = Mock()
@@ -446,7 +446,7 @@ class TestAlertingMiddlewareCounterReset:
 class TestAlertingMiddlewareLogging:
     """Test structured logging."""
 
-    def test_critical_log_emitted_on_alert(self, _caplog):
+    def test_critical_log_emitted_on_alert(self):
         """Test that critical log is emitted when alert is sent."""
         app = FastAPI()
         dispatched_alerts: list[dict[str, Any]] = []
@@ -462,8 +462,8 @@ class TestAlertingMiddlewareLogging:
         mock_request.method = "GET"
         mock_request.client.host = "127.0.0.1"
 
-        # Note: structlog might not work with caplog in the same way
-        # This test documents the expected behavior
+        # Note: structlog logs are not captured by caplog in the same way
+        # This test verifies the alert dispatch behavior
         middleware._check_alert("rate_limit", mock_request)
 
         # Verify alert was dispatched (logging tested separately)

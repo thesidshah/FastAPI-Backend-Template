@@ -14,7 +14,6 @@ import structlog
 logger = structlog.get_logger(__name__)
 
 try:
-    import redis.asyncio as redis
     from redis.asyncio import Redis
     from redis.exceptions import RedisError
 

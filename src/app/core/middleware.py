@@ -145,11 +145,12 @@ def register_middlewares(app: FastAPI, settings: AppSettings) -> None:
                         window_seconds=60,
                     )
                     logger.info(
-                        "middleware.registered", name="RedisRateLimitMiddleware"
+                        "middleware.registered",
+                        name="RedisRateLimitMiddleware",
                     )
                 else:
                     logger.warning(
-                        "redis not available, " "using SimpleRateLimitMiddleware"
+                        "redis not available, using SimpleRateLimitMiddleware",
                     )
                     app.add_middleware(
                         SimpleRateLimitMiddleware,
@@ -158,11 +159,12 @@ def register_middlewares(app: FastAPI, settings: AppSettings) -> None:
                         burst_size=security_settings.rate_limit_burst,
                     )
                     logger.info(
-                        "middleware.registered", name="SimpleRateLimitMiddleware"
+                        "middleware.registered",
+                        name="SimpleRateLimitMiddleware",
                     )
             except ImportError:
                 logger.warning(
-                    "redis not installed," " using SimpleRateLimitMiddleware"
+                    "redis not installed, using SimpleRateLimitMiddleware",
                 )
                 app.add_middleware(
                     SimpleRateLimitMiddleware,
@@ -327,7 +329,7 @@ def register_middlewares(app: FastAPI, settings: AppSettings) -> None:
                 security_settings.enable_geo_blocking,
                 security_settings.enable_circuit_breaker,
                 security_settings.enable_ddos_protection,
-            ]
+            ],
         ),
         monitoring=security_settings.enable_prometheus,
     )

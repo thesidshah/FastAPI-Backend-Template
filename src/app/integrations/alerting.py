@@ -23,7 +23,6 @@ import json
 import os
 import smtplib
 from collections.abc import Callable
-from typing import Any as _CallableAny
 from email.message import EmailMessage
 from functools import partial
 from typing import Any
@@ -167,7 +166,10 @@ class AlertDispatcher:
         return "\n".join(lines)
 
     def _run_background_task(
-        self, func: Callable[..., None], *args: Any, **kwargs: Any
+        self,
+        func: Callable[..., None],
+        *args: Any,
+        **kwargs: Any,
     ) -> None:
         """
         Run blocking alert integrations without stalling the event loop.
@@ -229,7 +231,9 @@ class AlertDispatcher:
         except OSError as exc:
             # Network errors, timeouts, etc.
             logger.error(
-                "alerting.teams_failed", error=str(exc), webhook_url=webhook_url
+                "alerting.teams_failed",
+                error=str(exc),
+                webhook_url=webhook_url,
             )
             raise TeamsWebhookError(
                 f"Failed to send Teams notification: {exc}",

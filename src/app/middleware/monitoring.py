@@ -19,7 +19,12 @@ logger = structlog.get_logger(__name__)
 
 # Try to import prometheus, but make it optional
 try:
-    from prometheus_client import Counter, Gauge, Histogram, generate_latest  # type: ignore[import-not-found]
+    from prometheus_client import (  # type: ignore[import-not-found]
+        Counter,
+        Gauge,
+        Histogram,
+        generate_latest,
+    )
 
     PROMETHEUS_AVAILABLE = True
 
@@ -110,7 +115,8 @@ class MetricsMiddleware(BaseHTTPMiddleware):
                 ).inc()
 
                 request_duration.labels(
-                    method=request.method, path=path_pattern
+                    method=request.method,
+                    path=path_pattern,
                 ).observe(
                     duration,
                 )
