@@ -8,7 +8,6 @@ from __future__ import annotations
 import json
 import time
 from collections import defaultdict
-from typing import Dict, List, Optional, Set
 
 import structlog
 from fastapi import Request, Response
@@ -30,7 +29,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         is_production: bool = False,
         enable_hsts: bool = True,
         enable_csp: bool = False,
-        csp_policy: Optional[str] = None,
+        csp_policy: str | None = None,
     ):
         super().__init__(app)
         self.is_production = is_production
@@ -39,7 +38,9 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         self.csp_policy = csp_policy or "default-src 'self'"
 
     async def dispatch(
-        self, request: Request, call_next: RequestResponseEndpoint
+        self,
+        request: Request,
+        call_next: RequestResponseEndpoint,
     ) -> Response:
         response = await call_next(request)
 
@@ -67,7 +68,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
                 "Cache-Control": "no-store, max-age=0",
                 # Remove server header info
                 "Server": "undisclosed",
-            }
+            },
         )
 
         # HSTS - only in production with HTTPS
@@ -124,8 +125,8 @@ class ContentValidationMiddleware(BaseHTTPMiddleware):
     def __init__(
         self,
         app: ASGIApp,
-        size_limits: Optional[Dict[str, int]] = None,
-        allowed_types: Optional[Dict[str, Set[str]]] = None,
+        size_limits: dict[str, int] | None = None,
+        allowed_types: dict[str, set[str]] | None = None,
         block_null_bytes: bool = True,
     ):
         super().__init__(app)
@@ -134,7 +135,9 @@ class ContentValidationMiddleware(BaseHTTPMiddleware):
         self.block_null_bytes = block_null_bytes
 
     async def dispatch(
-        self, request: Request, call_next: RequestResponseEndpoint
+        self,
+        request: Request,
+        call_next: RequestResponseEndpoint,
     ) -> Response:
         # Skip validation for GET, HEAD, OPTIONS
         if request.method in ("GET", "HEAD", "OPTIONS"):
@@ -156,7 +159,7 @@ class ContentValidationMiddleware(BaseHTTPMiddleware):
                 )
                 return Response(
                     content=json.dumps(
-                        {"error": "Payload too large", "max_size": limit}
+                        {"error": "Payload too large", "max_size": limit},
                     ),
                     status_code=413,
                     media_type="application/json",
@@ -179,7 +182,7 @@ class ContentValidationMiddleware(BaseHTTPMiddleware):
                         {
                             "error": "Unsupported media type",
                             "allowed_types": list(allowed),
-                        }
+                        },
                     ),
                     status_code=415,
                     media_type="application/json",
@@ -220,7 +223,7 @@ class SimpleRateLimitMiddleware(BaseHTTPMiddleware):
         requests_per_minute: int = 60,
         requests_per_hour: int = 1000,
         burst_size: int = 10,
-        excluded_paths: Optional[Set[str]] = None,
+        excluded_paths: set[str] | None = None,
     ):
         super().__init__(app)
         self.rpm = requests_per_minute
@@ -235,15 +238,17 @@ class SimpleRateLimitMiddleware(BaseHTTPMiddleware):
         }
 
         # Sliding windows: client_id -> list of timestamps
-        self.minute_windows: Dict[str, List[float]] = defaultdict(list)
-        self.hour_windows: Dict[str, List[float]] = defaultdict(list)
+        self.minute_windows: dict[str, list[float]] = defaultdict(list)
+        self.hour_windows: dict[str, list[float]] = defaultdict(list)
 
         # Cleanup tracking
         self._last_cleanup = time.time()
         self._cleanup_interval = 300  # 5 minutes
 
     async def dispatch(
-        self, request: Request, call_next: RequestResponseEndpoint
+        self,
+        request: Request,
+        call_next: RequestResponseEndpoint,
     ) -> Response:
         # Skip rate limiting for excluded paths
         if request.url.path in self.excluded_paths:
@@ -262,11 +267,13 @@ class SimpleRateLimitMiddleware(BaseHTTPMiddleware):
 
         if not is_allowed:
             logger.warning(
-                "rate_limit.exceeded", client=client_id, path=request.url.path
+                "rate_limit.exceeded",
+                client=client_id,
+                path=request.url.path,
             )
             return Response(
                 content=json.dumps(
-                    {"error": "Rate limit exceeded", "retry_after": retry_after}
+                    {"error": "Rate limit exceeded", "retry_after": retry_after},
                 ),
                 status_code=429,
                 headers={
@@ -339,7 +346,7 @@ class SimpleRateLimitMiddleware(BaseHTTPMiddleware):
 
         return True, 0
 
-    def _cleanup_old_entries(self, now: float):
+    def _cleanup_old_entries(self, now: float) -> None:
         """Remove old entries to prevent memory leak."""
         minute_cutoff = now - 60
         hour_cutoff = now - 3600
@@ -382,7 +389,7 @@ class ProxyHeadersMiddleware(BaseHTTPMiddleware):
     def __init__(
         self,
         app: ASGIApp,
-        trusted_proxies: Optional[Set[str]] = None,
+        trusted_proxies: set[str] | None = None,
         trust_x_forwarded: bool = True,
     ):
         super().__init__(app)
@@ -390,7 +397,9 @@ class ProxyHeadersMiddleware(BaseHTTPMiddleware):
         self.trust_x_forwarded = trust_x_forwarded
 
     async def dispatch(
-        self, request: Request, call_next: RequestResponseEndpoint
+        self,
+        request: Request,
+        call_next: RequestResponseEndpoint,
     ) -> Response:
         # Only trust headers from known proxies
         if request.client and request.client.host in self.trusted_proxies:

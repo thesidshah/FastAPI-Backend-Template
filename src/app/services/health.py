@@ -43,8 +43,7 @@ class HealthService:
             "cache": ProbeStatus.PASS,
         }
         is_degraded = (
-            ProbeStatus.FAIL in checks.values()
-            or ProbeStatus.WARN in checks.values()
+            ProbeStatus.FAIL in checks.values() or ProbeStatus.WARN in checks.values()
         )
         status = ProbeStatus.WARN if is_degraded else ProbeStatus.PASS
 

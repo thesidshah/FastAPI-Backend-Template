@@ -11,7 +11,6 @@ import hmac
 import json
 import time
 from collections import defaultdict
-from typing import Any, Dict, List, Optional, Set
 
 import structlog
 from fastapi import Request, Response
@@ -30,9 +29,9 @@ class GeoBlockingMiddleware(BaseHTTPMiddleware):
     def __init__(
         self,
         app: ASGIApp,
-        allowed_countries: Optional[Set[str]] = None,
-        blocked_countries: Optional[Set[str]] = None,
-        geoip_database_path: Optional[str] = None,
+        allowed_countries: set[str] | None = None,
+        blocked_countries: set[str] | None = None,
+        geoip_database_path: str | None = None,
     ):
         super().__init__(app)
         self.allowed_countries = allowed_countries
@@ -42,14 +41,16 @@ class GeoBlockingMiddleware(BaseHTTPMiddleware):
         self.geoip = None
         if geoip_database_path:
             try:
-                import geoip2.database
+                import geoip2.database  # type: ignore[import-not-found]
 
                 self.geoip = geoip2.database.Reader(geoip_database_path)
             except ImportError:
                 logger.warning("geoip2 not installed, geo-blocking disabled")
 
     async def dispatch(
-        self, request: Request, call_next: RequestResponseEndpoint
+        self,
+        request: Request,
+        call_next: RequestResponseEndpoint,
     ) -> Response:
         if not self.geoip:
             return await call_next(request)
@@ -63,10 +64,7 @@ class GeoBlockingMiddleware(BaseHTTPMiddleware):
             country_code = response.country.iso_code
 
             # Check restrictions
-            if (
-                self.allowed_countries
-                and country_code not in self.allowed_countries
-            ):
+            if self.allowed_countries and country_code not in self.allowed_countries:
                 return self._blocked_response(country_code)
 
             if country_code in self.blocked_countries:
@@ -77,7 +75,9 @@ class GeoBlockingMiddleware(BaseHTTPMiddleware):
 
         except Exception as e:
             logger.warning(
-                "geo_blocking.lookup_failed", ip=client_ip, error=str(e)
+                "geo_blocking.lookup_failed",
+                ip=client_ip,
+                error=str(e),
             )
 
         return await call_next(request)
@@ -123,7 +123,9 @@ class RequestSignatureMiddleware(BaseHTTPMiddleware):
         self.max_age = max_age_seconds
 
     async def dispatch(
-        self, request: Request, call_next: RequestResponseEndpoint
+        self,
+        request: Request,
+        call_next: RequestResponseEndpoint,
     ) -> Response:
         # Skip signature check for public endpoints
         if request.url.path.startswith("/health"):
@@ -154,7 +156,9 @@ class RequestSignatureMiddleware(BaseHTTPMiddleware):
             # Calculate expected signature
             message = f"{request.method}:{request.url.path}:{timestamp}:{body.decode()}"
             expected_signature = hmac.new(
-                self.secret_key, message.encode(), hashlib.sha256
+                self.secret_key,
+                message.encode(),
+                hashlib.sha256,
             ).hexdigest()
 
             # Verify signature (constant time comparison)
@@ -198,12 +202,14 @@ class CircuitBreakerMiddleware(BaseHTTPMiddleware):
         self.expected_exception = expected_exception
 
         # Circuit state per endpoint
-        self.states: Dict[str, str] = defaultdict(lambda: "closed")
-        self.failure_counts: Dict[str, int] = defaultdict(int)
-        self.last_failure_times: Dict[str, float] = {}
+        self.states: dict[str, str] = defaultdict(lambda: "closed")
+        self.failure_counts: dict[str, int] = defaultdict(int)
+        self.last_failure_times: dict[str, float] = {}
 
     async def dispatch(
-        self, request: Request, call_next: RequestResponseEndpoint
+        self,
+        request: Request,
+        call_next: RequestResponseEndpoint,
     ) -> Response:
         endpoint = f"{request.method}:{request.url.path}"
 
@@ -234,15 +240,16 @@ class CircuitBreakerMiddleware(BaseHTTPMiddleware):
 
             return response
 
-        except self.expected_exception as e:
-            self._record_failure(endpoint)
+        except Exception as e:
+            if isinstance(e, self.expected_exception):
+                self._record_failure(endpoint)
 
-            if self.states[endpoint] == "open":
-                return Response(
-                    content=json.dumps({"error": "Service temporarily unavailable"}),
-                    status_code=503,
-                    media_type="application/json",
-                )
+                if self.states[endpoint] == "open":
+                    return Response(
+                        content=json.dumps({"error": "Service temporarily unavailable"}),
+                        status_code=503,
+                        media_type="application/json",
+                    )
 
             raise
 
@@ -250,13 +257,13 @@ class CircuitBreakerMiddleware(BaseHTTPMiddleware):
         """Get current circuit state."""
         return self.states[endpoint]
 
-    def _record_success(self, endpoint: str):
+    def _record_success(self, endpoint: str) -> None:
         """Record successful request."""
         self.failure_counts[endpoint] = 0
         if self.states[endpoint] == "half_open":
             self.states[endpoint] = "closed"
 
-    def _record_failure(self, endpoint: str):
+    def _record_failure(self, endpoint: str) -> None:
         """Record failed request."""
         self.failure_counts[endpoint] += 1
         self.last_failure_times[endpoint] = time.time()
@@ -293,16 +300,18 @@ class DDoSProtectionMiddleware(BaseHTTPMiddleware):
         self.ip_threshold = unique_ip_threshold
 
         # Tracking
-        self.connection_counts: Dict[str, int] = defaultdict(int)
-        self.request_counts: Dict[str, List[float]] = defaultdict(list)
-        self.unique_ips: Set[str] = set()
-        self.blocked_ips: Set[str] = set()
+        self.connection_counts: dict[str, int] = defaultdict(int)
+        self.request_counts: dict[str, list[float]] = defaultdict(list)
+        self.unique_ips: set[str] = set()
+        self.blocked_ips: set[str] = set()
 
         # Start cleanup task
         asyncio.create_task(self._cleanup_loop())
 
     async def dispatch(
-        self, request: Request, call_next: RequestResponseEndpoint
+        self,
+        request: Request,
+        call_next: RequestResponseEndpoint,
     ) -> Response:
         client_ip = self._get_client_ip(request)
 
@@ -371,7 +380,7 @@ class DDoSProtectionMiddleware(BaseHTTPMiddleware):
 
         return False
 
-    async def _cleanup_loop(self):
+    async def _cleanup_loop(self) -> None:
         """Periodic cleanup of tracking data."""
         while True:
             await asyncio.sleep(300)  # 5 minutes

@@ -14,7 +14,7 @@ Use this checklist before publishing the repository.
 
 ## Code Quality
 
-- [ ] All tests passing (`pytest`)
+- [x] All tests passing (`pytest`)
 - [ ] Code properly linted (`ruff check`)
 - [ ] Code properly formatted (`black`)
 - [ ] Type checking passes (`mypy src`)

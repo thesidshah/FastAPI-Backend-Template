@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import json
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import structlog
 from fastapi import Request, Response
@@ -36,9 +36,9 @@ class JWTAuthenticationMiddleware(BaseHTTPMiddleware):
         app: ASGIApp,
         secret_key: str,
         algorithm: str = "HS256",
-        auth_required_paths: Optional[List[str]] = None,
-        public_paths: Optional[List[str]] = None,
-        jwks_url: Optional[str] = None,  # For OAuth providers
+        auth_required_paths: list[str] | None = None,
+        public_paths: list[str] | None = None,
+        jwks_url: str | None = None,  # For OAuth providers
     ):
         super().__init__(app)
         self.secret_key = secret_key
@@ -57,7 +57,9 @@ class JWTAuthenticationMiddleware(BaseHTTPMiddleware):
             logger.error("JWT library not available, authentication will not work")
 
     async def dispatch(
-        self, request: Request, call_next: RequestResponseEndpoint
+        self,
+        request: Request,
+        call_next: RequestResponseEndpoint,
     ) -> Response:
         # Initialize request state
         request.state.user = None
@@ -118,7 +120,7 @@ class JWTAuthenticationMiddleware(BaseHTTPMiddleware):
         # Process request
         return await call_next(request)
 
-    def _extract_token(self, request: Request) -> Optional[str]:
+    def _extract_token(self, request: Request) -> str | None:
         """Extract token from request."""
 
         # Check Authorization header
@@ -138,7 +140,7 @@ class JWTAuthenticationMiddleware(BaseHTTPMiddleware):
 
         return None
 
-    async def _validate_token(self, token: str) -> Dict[str, Any]:
+    async def _validate_token(self, token: str) -> dict[str, Any]:
         """Validate JWT token."""
 
         if not JWT_AVAILABLE:
@@ -157,7 +159,7 @@ class JWTAuthenticationMiddleware(BaseHTTPMiddleware):
             if payload["exp"] < time.time():
                 raise jwt.ExpiredSignatureError("Token has expired")
 
-        return payload
+        return dict(payload)
 
     def _path_requires_auth(self, path: str) -> bool:
         """Check if path requires authentication."""
@@ -185,7 +187,7 @@ class APIKeyAuthenticationMiddleware(BaseHTTPMiddleware):
         app: ASGIApp,
         header_name: str = "X-API-Key",
         query_param: str = "api_key",
-        validate_key_func: Optional[Any] = None,
+        validate_key_func: Any | None = None,
     ):
         super().__init__(app)
         self.header_name = header_name
@@ -193,11 +195,13 @@ class APIKeyAuthenticationMiddleware(BaseHTTPMiddleware):
         self.validate_key_func = validate_key_func
 
     async def dispatch(
-        self, request: Request, call_next: RequestResponseEndpoint
+        self,
+        request: Request,
+        call_next: RequestResponseEndpoint,
     ) -> Response:
         # Extract API key
         api_key = request.headers.get(self.header_name) or request.query_params.get(
-            self.query_param
+            self.query_param,
         )
 
         if api_key and self.validate_key_func:
@@ -224,16 +228,19 @@ class MultiAuthMiddleware(BaseHTTPMiddleware):
         self,
         app: ASGIApp,
         jwt_secret: str,
-        api_key_validator: Optional[Any] = None,
+        api_key_validator: Any | None = None,
     ):
         super().__init__(app)
         self.jwt_middleware = JWTAuthenticationMiddleware(app, jwt_secret)
         self.api_key_middleware = APIKeyAuthenticationMiddleware(
-            app, validate_key_func=api_key_validator
+            app,
+            validate_key_func=api_key_validator,
         )
 
     async def dispatch(
-        self, request: Request, call_next: RequestResponseEndpoint
+        self,
+        request: Request,
+        call_next: RequestResponseEndpoint,
     ) -> Response:
         # Initialize request state
         request.state.user = None
@@ -258,7 +265,7 @@ class MultiAuthMiddleware(BaseHTTPMiddleware):
         # Try API key if JWT failed
         if not request.state.is_authenticated:
             api_key = request.headers.get(
-                self.api_key_middleware.header_name
+                self.api_key_middleware.header_name,
             ) or request.query_params.get(self.api_key_middleware.query_param)
 
             if api_key and self.api_key_middleware.validate_key_func:
@@ -274,7 +281,9 @@ class MultiAuthMiddleware(BaseHTTPMiddleware):
 
         # Check if any auth succeeded
         is_authenticated = request.state.is_authenticated or getattr(
-            request.state, "is_api_authenticated", False
+            request.state,
+            "is_api_authenticated",
+            False,
         )
 
         if not is_authenticated and self._requires_auth(request):

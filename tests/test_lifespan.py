@@ -1,10 +1,10 @@
+from unittest.mock import patch
 
 import pytest
-from unittest.mock import patch
+from app.core.config import AppSettings, Environment
+from app.core.lifespan import build_lifespan
 from fastapi import FastAPI
 
-from app.core.lifespan import build_lifespan
-from app.core.config import AppSettings, Environment
 
 @pytest.fixture
 def mock_settings():
@@ -15,6 +15,7 @@ def mock_settings():
         log_level="INFO",
         # Add other necessary settings
     )
+
 
 @pytest.mark.asyncio
 async def test_lifespan_events(mock_settings):
@@ -32,5 +33,5 @@ async def test_lifespan_events(mock_settings):
                 environment="test",
                 version="0.1.0",
             )
-        
+
         mock_logger.info.assert_called_with("application.shutdown")

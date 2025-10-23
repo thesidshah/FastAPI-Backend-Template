@@ -108,17 +108,19 @@ The `AlertingMiddleware` automatically triggers alerts when security thresholds 
 
 ```python
 from fastapi import FastAPI
-from src.app.middleware.monitoring import AlertingMiddleware
+from app.middleware.monitoring import AlertingMiddleware
 
 app = FastAPI()
 
 # Add alerting middleware with custom thresholds
+# Custom thresholds are merged with defaults, so you only need to specify
+# the ones you want to override
 app.add_middleware(
     AlertingMiddleware,
     alert_threshold={
-        "rate_limit": 100,      # Alert after 100 rate limit hits
-        "auth_failures": 50,    # Alert after 50 authentication failures
-        "large_payloads": 10,   # Alert after 10 oversized payload attempts
+        "rate_limit": 100,      # Override default (100)
+        "auth_failures": 50,    # Override default (50)
+        # large_payloads will use default threshold of 10
     }
 )
 ```
@@ -142,7 +144,7 @@ After an alert is sent, the system waits 5 minutes (300 seconds) before sending 
 You can also use the `AlertDispatcher` directly in your application code:
 
 ```python
-from src.app.integrations.alerting import AlertDispatcher
+from app.integrations.alerting import AlertDispatcher
 
 # Initialize dispatcher (loads config from environment)
 dispatcher = AlertDispatcher()
@@ -176,7 +178,7 @@ dispatcher.dispatch({
 The `AlertDispatcher` supports dependency injection for testing:
 
 ```python
-from src.app.integrations.alerting import AlertDispatcher
+from app.integrations.alerting import AlertDispatcher
 
 def test_my_alert_logic():
     sent_alerts = []
@@ -253,6 +255,9 @@ AlertDispatcherError          # Base exception
 All errors are logged using structured logging:
 
 ```python
+# Background task failure (general)
+logger.error("alerting.background_task_failed", error=str(exc), error_type=type_name)
+
 # Teams webhook failure
 logger.error("alerting.teams_failed", error=str(exc), webhook_url=url)
 
@@ -265,10 +270,11 @@ logger.error("alerting.teams_unexpected_error", error=str(exc), error_type=type_
 
 ### Graceful Degradation
 
-- Individual channel failures don't affect other channels
-- All exceptions are caught and logged, never propagated
-- Background execution prevents application impact
-- Failed alerts don't retry automatically (implement retry logic externally if needed)
+- **Individual channel failures don't affect other channels**: If Teams webhook fails, email will still be sent
+- **All exceptions are caught and logged**: Errors are logged with structured logging but never propagated to the application
+- **Background execution prevents application impact**: Alerts run in thread pool executors (async context) or with exception handling (sync context)
+- **Best-effort delivery**: The alerting system is designed to be non-blocking and won't fail requests if alerts can't be delivered
+- **Failed alerts don't retry automatically**: Implement retry logic externally if needed (e.g., using a message queue)
 
 ## Common SMTP Providers
 

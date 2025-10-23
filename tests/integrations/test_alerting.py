@@ -16,7 +16,7 @@ import smtplib
 from typing import Any
 from unittest.mock import Mock, patch
 
-from src.app.integrations.alerting import (
+from app.integrations.alerting import (
     AlertDispatcher,
     AlertDispatcherError,
     EmailDeliveryError,
@@ -90,7 +90,7 @@ class TestTeamsNotifications:
     def test_teams_error_handling(self):
         """Test that Teams webhook errors are properly raised."""
 
-        def failing_sender(url: str, message: str) -> None:
+        def failing_sender(_url: str, _message: str) -> None:
             raise TeamsWebhookError("Webhook failed")
 
         dispatcher = AlertDispatcher(
@@ -203,7 +203,11 @@ class TestEmailNotifications:
             "username": None,
             "password": None,
             "from_address": "alerts@example.com",
-            "recipients": ["ops@example.com", "security@example.com", "admin@example.com"],
+            "recipients": [
+                "ops@example.com",
+                "security@example.com",
+                "admin@example.com",
+            ],
             "use_ssl": False,
             "use_tls": False,
         }
@@ -242,7 +246,7 @@ class TestEmailNotifications:
     def test_email_error_handling(self):
         """Test that email delivery errors are properly raised."""
 
-        def failing_sender(config: dict[str, Any], subject: str, body: str) -> None:
+        def failing_sender(_config: dict[str, Any], _subject: str, _body: str) -> None:
             raise EmailDeliveryError("SMTP connection failed")
 
         email_config = {
@@ -308,7 +312,7 @@ class TestMultiChannelDispatch:
         """Test that Teams failure doesn't prevent email from being sent."""
         email_calls: list[tuple[dict[str, Any], str, str]] = []
 
-        def failing_teams_sender(url: str, message: str) -> None:
+        def failing_teams_sender(_url: str, _message: str) -> None:
             raise TeamsWebhookError("Teams failed")
 
         def fake_email_sender(config: dict[str, Any], subject: str, body: str) -> None:
@@ -453,7 +457,10 @@ class TestConfigurationLoading:
 
         assert dispatcher.email_config["host"] == "smtp.test.com"
         assert dispatcher.email_config["port"] == 465
-        assert dispatcher.email_config["recipients"] == ["admin@test.com", "ops@test.com"]
+        assert dispatcher.email_config["recipients"] == [
+            "admin@test.com",
+            "ops@test.com",
+        ]
         assert dispatcher.email_config["use_ssl"] is True
 
     @patch.dict("os.environ", {}, clear=True)
@@ -532,6 +539,7 @@ class TestSMTPIntegration:
 
         # Give background task time to execute
         import time
+
         time.sleep(0.1)
 
         # Verify SMTP connection was made
@@ -566,6 +574,7 @@ class TestSMTPIntegration:
 
         # Give background task time to execute
         import time
+
         time.sleep(0.1)
 
         # Verify SMTP_SSL connection was made
@@ -599,6 +608,7 @@ class TestSMTPIntegration:
 
         # Give background task time to execute
         import time
+
         time.sleep(0.1)
 
         # Verify login was not called
@@ -650,4 +660,3 @@ class TestExceptionHierarchy:
         """Test EmailDeliveryError with custom message."""
         error = EmailDeliveryError("SMTP authentication failed")
         assert str(error) == "SMTP authentication failed"
-        

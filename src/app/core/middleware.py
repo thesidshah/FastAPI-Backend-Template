@@ -2,8 +2,6 @@ from __future__ import annotations
 
 import time
 import uuid
-from collections.abc import Callable, Awaitable
-from typing import Any
 
 import structlog
 from fastapi import FastAPI, Request, Response
@@ -12,14 +10,16 @@ from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoin
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 from starlette.types import ASGIApp
 
-from .config import AppSettings, get_security_settings, SecuritySettings
+from .config import AppSettings, SecuritySettings, get_security_settings
 
 
 class RequestIDMiddleware(BaseHTTPMiddleware):
     """Attach a stable request id to each incoming request for traceability."""
 
     async def dispatch(
-        self, request: Request, call_next: RequestResponseEndpoint,  # better typing
+        self,
+        request: Request,
+        call_next: RequestResponseEndpoint,  # better typing
     ) -> Response:
         request_id = request.headers.get("x-request-id", str(uuid.uuid4()))
         structlog.contextvars.clear_contextvars()
@@ -44,7 +44,9 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
         self.include_body = include_body
 
     async def dispatch(
-        self, request: Request, call_next: RequestResponseEndpoint,
+        self,
+        request: Request,
+        call_next: RequestResponseEndpoint,
     ) -> Response:
         logger = structlog.get_logger("http.request")
         start_time = time.perf_counter()
@@ -54,7 +56,7 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
             body = await request.body()
             body_snippet = body.decode("utf-8", errors="replace")[:256]
             # Allow downstream to read the body again
-            request._body = body  # type: ignore[attr-defined]
+            request._body = body
 
         logger.info(
             "http.request.start",
@@ -96,7 +98,7 @@ def register_middlewares(app: FastAPI, settings: AppSettings) -> None:
     - Last added = innermost (processes requests first, responses last)
     """
     logger = structlog.get_logger("middleware.registration")
-    security_settings : SecuritySettings = get_security_settings()
+    security_settings: SecuritySettings = get_security_settings()
 
     # Import security middleware
     from ..middleware.security import (
@@ -123,11 +125,15 @@ def register_middlewares(app: FastAPI, settings: AppSettings) -> None:
         # Try Redis rate limiter first (Phase 2)
         if security_settings.redis_enabled and security_settings.redis_url:
             try:
-                from ..middleware.rate_limit import REDIS_AVAILABLE, RedisRateLimitMiddleware
+                from ..middleware.rate_limit import (
+                    REDIS_AVAILABLE,
+                    RedisRateLimitMiddleware,
+                )
 
                 if REDIS_AVAILABLE:
                     import redis.asyncio as redis
-                    redis_client = redis.from_url(
+
+                    redis_client = redis.from_url(  # type: ignore[no-untyped-call]
                         security_settings.redis_url,
                         encoding="utf-8",
                         decode_responses=True,
@@ -138,18 +144,26 @@ def register_middlewares(app: FastAPI, settings: AppSettings) -> None:
                         default_limit=security_settings.rate_limit_per_minute,
                         window_seconds=60,
                     )
-                    logger.info("middleware.registered", name="RedisRateLimitMiddleware")
+                    logger.info(
+                        "middleware.registered", name="RedisRateLimitMiddleware"
+                    )
                 else:
-                    logger.warning("redis not available, using SimpleRateLimitMiddleware")
+                    logger.warning(
+                        "redis not available, " "using SimpleRateLimitMiddleware"
+                    )
                     app.add_middleware(
                         SimpleRateLimitMiddleware,
                         requests_per_minute=security_settings.rate_limit_per_minute,
                         requests_per_hour=security_settings.rate_limit_per_hour,
                         burst_size=security_settings.rate_limit_burst,
                     )
-                    logger.info("middleware.registered", name="SimpleRateLimitMiddleware")
+                    logger.info(
+                        "middleware.registered", name="SimpleRateLimitMiddleware"
+                    )
             except ImportError:
-                logger.warning("redis not installed, using SimpleRateLimitMiddleware")
+                logger.warning(
+                    "redis not installed," " using SimpleRateLimitMiddleware"
+                )
                 app.add_middleware(
                     SimpleRateLimitMiddleware,
                     requests_per_minute=security_settings.rate_limit_per_minute,
@@ -308,10 +322,12 @@ def register_middlewares(app: FastAPI, settings: AppSettings) -> None:
         phase1_enabled=True,
         phase2_redis=security_settings.redis_enabled,
         phase2_jwt=bool(security_settings.jwt_secret),
-        phase3_advanced=any([
-            security_settings.enable_geo_blocking,
-            security_settings.enable_circuit_breaker,
-            security_settings.enable_ddos_protection,
-        ]),
+        phase3_advanced=any(
+            [
+                security_settings.enable_geo_blocking,
+                security_settings.enable_circuit_breaker,
+                security_settings.enable_ddos_protection,
+            ]
+        ),
         monitoring=security_settings.enable_prometheus,
     )

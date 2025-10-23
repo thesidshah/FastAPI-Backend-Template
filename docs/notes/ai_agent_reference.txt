@@ -1,0 +1,137 @@
+AI_AGENT_REFERENCE_FASTAPI_BACKEND_TEMPLATE
+VERSION:2025-10-23
+PROJECT:FastAPI-Backend-Template|GITHUB:thesidshah/FastAPI-Backend-Template|LICENSE:MIT
+PYTHON:>=3.11|FASTAPI:>=0.111,<0.112|OWNER:Siddhant_Shah(@thesidshah)
+
+=== PROJECT STRUCTURE ===
+src/app/main.py:10-32 create_app(settings)->FastAPI, app=create_app()
+src/app/core/config.py:23-92 AppSettings, :94-155 SecuritySettings, :157-166 lru_cache getters
+src/app/core/logging.py configure_logging(settings)
+src/app/core/lifespan.py:12-27 build_lifespan(settings)->lifespan contextmanager
+src/app/core/middleware.py:16-34 RequestIDMiddleware, :37-86 RequestLoggingMiddleware, :88-322 register_middlewares(app,settings)
+src/app/core/decorators.py Custom decorators
+src/app/api/routes/__init__.py:8-18 build_api_router(settings), register_routes(app,settings)
+src/app/api/routes/health.py Health endpoints /health /health/ready /health/info
+src/app/api/routes/meta.py Metadata endpoints
+src/app/middleware/security.py:20-83 SecurityHeadersMiddleware, :86-208 ContentValidationMiddleware, :210-372 SimpleRateLimitMiddleware, :375-411 ProxyHeadersMiddleware
+src/app/middleware/rate_limit.py:31-251 RedisRateLimitMiddleware(Phase2,requires redis)
+src/app/middleware/auth.py:29-175 JWTAuthenticationMiddleware, :178-216 APIKeyAuthenticationMiddleware, :218-298 MultiAuthMiddleware
+src/app/middleware/monitoring.py MetricsMiddleware,AlertingMiddleware(Phase3)
+src/app/middleware/advanced.py GeoBlockingMiddleware,CircuitBreakerMiddleware,DDoSProtectionMiddleware(Phase3)
+src/app/integrations/alerting.py:48-354 AlertDispatcher(teams_webhook_url,email_config,teams_sender,email_sender)
+src/app/schemas/health.py Pydantic health schemas
+src/app/services/health.py Health service logic
+tests/conftest.py Shared fixtures
+tests/integrations/test_alerting.py:1-656 Comprehensive alerting tests
+
+=== PHASES ===
+Phase1:Core security,no external deps,SimpleRateLimitMiddleware,SecurityHeadersMiddleware,ContentValidationMiddleware,ProxyHeadersMiddleware
+Phase2:Redis+JWT,requires redis>=5.0+pyjwt>=2.8,RedisRateLimitMiddleware,JWTAuthenticationMiddleware
+Phase3:Advanced,requires geoip2>=4.7+prometheus-client>=0.19,GeoBlockingMiddleware,MetricsMiddleware,AlertingMiddleware
+
+=== CONFIGURATION ===
+AppSettings PREFIX:APP_ environment:Environment(LOCAL|TEST|STAGING|PRODUCTION) debug:bool log_level:str log_format:LogFormat(JSON|CONSOLE) api_prefix:str="/api/v1" cors_allow_origins:list cors_allow_credentials:bool allowed_hosts:list request_timeout_seconds:int enable_tracing:bool enable_metrics:bool
+SecuritySettings PREFIX:SECURITY_ rate_limit_enabled:bool rate_limit_per_minute:int=60 rate_limit_per_hour:int=1000 rate_limit_burst:int=10 max_upload_size:int=52428800 max_request_size:int=1048576 block_null_bytes:bool redis_enabled:bool redis_url:str jwt_secret:str jwt_algorithm:str="HS256" jwt_expiry_minutes:int=60 enable_geo_blocking:bool geoip_database_path:str enable_circuit_breaker:bool enable_prometheus:bool enable_alerting:bool alert_rate_limit_threshold:int alert_auth_failure_threshold:int
+Getters:get_app_settings()->AppSettings, get_security_settings()->SecuritySettings (lru_cached)
+
+=== MIDDLEWARE ORDER (reverse application) ===
+1.SecurityHeadersMiddleware X-Content-Type-Options:nosniff X-Frame-Options:DENY Referrer-Policy Server:undisclosed HSTS(if production+https) CSP(if enabled)
+2.RateLimitMiddleware RedisRateLimitMiddleware(if redis_enabled+redis_url+REDIS_AVAILABLE) else SimpleRateLimitMiddleware(if rate_limit_enabled) excluded:{/health,/metrics,/docs}
+3.ContentValidationMiddleware size_limits:{/api/upload:50MB,/api/:1MB,/:64KB} allowed_types:POST{json,form,multipart} block_null_bytes 413(too large) 415(unsupported type)
+4.ProxyHeadersMiddleware(if trust_proxy_headers) trusted_proxies:{127.0.0.1,::1} x-forwarded-for x-real-ip x-forwarded-proto
+5.JWTAuthenticationMiddleware(if jwt_secret+JWT_AVAILABLE) token sources:Authorization:Bearer,Cookie:access_token,Query:token request.state.user request.state.user_id request.state.user_tier request.state.scopes request.state.is_authenticated public_paths:[/health,/docs,/api/auth/]
+6.GeoBlockingMiddleware(if enable_geo_blocking+geoip_database_path) requires geoip2
+7.CircuitBreakerMiddleware(if enable_circuit_breaker) failure_threshold recovery_timeout
+8.DDoSProtectionMiddleware(if enable_ddos_protection) syn_threshold rate_threshold
+9.MetricsMiddleware(if enable_prometheus+PROMETHEUS_AVAILABLE) prometheus-client
+10.AlertingMiddleware(if enable_alerting) alert_threshold dict
+11.TrustedHostMiddleware(if allowed_hosts!=['*'])
+12.CORSMiddleware(if cors_allow_origins)
+13.RequestIDMiddleware X-Request-ID uuid4() structlog.contextvars
+14.RequestLoggingMiddleware include_body=debug X-Process-Time perf_counter
+
+=== ALERTING INTEGRATION ===
+AlertDispatcher(teams_webhook_url,email_config,teams_sender,email_sender)
+dispatch(payload:dict) payload:{event_type,count,path,method,client} NON_BLOCKING asyncio.run_in_executor
+_build_subject(event_type)->"[Security Alert] {title}"
+_build_alert_message(payload,for_email) format:Security alert triggered\nEvent:{event_type}\nCount:{count}\nMethod:{method}\nPath:{path}\nClient:{client}\n\nPlease investigate(if email)
+_post_to_teams_webhook(url,message) POST JSON{text:message} timeout:5s raises:TeamsWebhookError
+_send_email_notification(config,subject,body) EmailMessage SMTP_SSL(if use_ssl) else SMTP+starttls(if use_tls) login(if username+password) raises:EmailDeliveryError
+_load_email_config() ENV:SECURITY_ALERT_EMAIL_HOST(required) PORT(587) USERNAME PASSWORD FROM RECIPIENTS(comma-separated,required) USE_SSL(false) USE_TLS(true)
+_split_recipients(value)->list[str] split comma strip filter empty
+ENV:SECURITY_ALERT_TEAMS_WEBHOOK SECURITY_ALERT_EMAIL_*
+Exceptions:AlertDispatcherError>TeamsWebhookError,EmailDeliveryError
+
+=== DEPENDENCIES ===
+CORE:fastapi>=0.111 uvicorn[standard]>=0.30 pydantic-settings>=2.3 structlog>=24.2 orjson>=3.10 python-dotenv>=1.0
+DEV:ruff black mypy pytest pytest-asyncio httpx pytest-cov
+PHASE2:redis>=5.0 hiredis>=2.2 pyjwt>=2.8 cryptography>=41.0
+PHASE3:geoip2>=4.7 prometheus-client>=0.19
+CONDITIONAL_IMPORTS try:import redis REDIS_AVAILABLE=True except:REDIS_AVAILABLE=False try:import jwt JWT_AVAILABLE=True except:JWT_AVAILABLE=False
+
+=== API ROUTES ===
+PREFIX:/api/v1(configurable APP_API_PREFIX)
+GET /api/v1/health {"status":"healthy"}
+GET /api/v1/health/ready {"status":"ready"}
+GET /api/v1/health/info metadata
+DOCS:/docs(LOCAL|STAGING) /redoc(LOCAL|STAGING) /openapi.json
+ADDING_ROUTE:1.Create src/app/api/routes/<feature>.py router=APIRouter(prefix="/<feature>",tags=["<Feature>"]) 2.Register in __init__.py 3.Add service src/app/services/<feature>.py 4.Create schemas src/app/schemas/<feature>.py 5.Write tests tests/test_<feature>.py
+
+=== TESTING ===
+pytest asyncio_mode:auto httpx.AsyncClient
+tests/conftest.py fixtures:app client settings security_settings
+tests/integrations/test_alerting.py:656 lines TestTeamsNotifications TestEmailNotifications TestMultiChannelDispatch TestMessageFormatting TestRecipientParsing TestConfigurationLoading TestSMTPIntegration TestExceptionHierarchy
+PATTERNS:_payload(overrides) fake_sender(url,message) @patch.dict("os.environ",{...},clear=True) @patch("smtplib.SMTP") time.sleep(0.1) mock_smtp.assert_called_once()
+RUN:pytest pytest --cov=app pytest -v pytest -k "test_name"
+
+=== MIDDLEWARE DETAILS ===
+SimpleRateLimitMiddleware:210-372 in-memory sliding window minute_windows:dict[str,list[float]] hour_windows:dict[str,list[float]] cleanup:300s client_id:ip:port:user_id(x-forwarded-for,x-real-ip,request.state.user_id) rpm+burst rph 429+Retry-After X-RateLimit-Remaining X-RateLimit-Limit
+RedisRateLimitMiddleware:31-251 distributed Lua script ZREMRANGEBYSCORE+ZCARD+ZADD+EXPIRE key:rate_limit:client_id:path endpoint_limits:{/api/auth/login:5,/api/auth/register:10,/api/password-reset:3,/api/upload:20} user_tier_multipliers:{free:1.0,basic:2.0,pro:5.0,enterprise:10.0} client_id:user:user_id or ip:sha256(ip)[:16] fail_open:yes X-RateLimit-* headers
+JWTAuthenticationMiddleware:29-175 secret_key algorithm="HS256" auth_required_paths:[/api/] public_paths:[/health,/docs,/api/auth/] token:Authorization:Bearer|Cookie:access_token|Query:token jwt.decode(token,secret_key,algorithms) payload:{sub|user_id->user_id,tier->user_tier,scopes->scopes,exp} jwt.ExpiredSignatureError->401 jwt.InvalidTokenError->401 no token on required->401 request.state:{user,user_id,user_tier,scopes,is_authenticated}
+ContentValidationMiddleware:86-208 skip:GET,HEAD,OPTIONS content-length vs size_limits 413 content-type vs allowed_types 415 null bytes in URL 400 DEFAULT_LIMITS:/api/upload:50MB /api/import:10MB /api/:1MB /webhook:256KB /graphql:100KB /:64KB ALLOWED_CONTENT_TYPES POST:{json,form,multipart,text} PUT:{json,octet-stream,multipart} PATCH:{json,merge-patch}
+SecurityHeadersMiddleware:20-83 X-Content-Type-Options:nosniff X-Frame-Options:DENY Referrer-Policy:strict-origin-when-cross-origin Permissions-Policy:camera=()... Cache-Control:no-store Server:undisclosed HSTS(if production+https):max-age=31536000;includeSubDomains;preload CSP(if enable_csp+production)
+RequestIDMiddleware:16-34 x-request-id or uuid4() structlog.contextvars.bind_contextvars(request_id) clear after X-Request-ID response header
+RequestLoggingMiddleware:37-86 include_body:bool perf_counter start http.request.start http.request.complete method path query status_code duration_ms body_snippet(if include_body,256 chars) X-Process-Time header exception logging
+
+=== PATTERNS ===
+IMPORT:from __future__ import annotations|standard|third-party|local|blank lines
+TYPE_HINTS:dict[str,int] str|None collections.abc.Sequence async def->AsyncIterator
+MIDDLEWARE:class CustomMiddleware(BaseHTTPMiddleware) __init__(app:ASGIApp,param) async dispatch(request,call_next)
+DEPENDENCY:from fastapi import Depends @router.get def endpoint(settings=Depends(get_settings))
+LOGGING:import structlog logger=structlog.get_logger(__name__) logger.info("event",key=value)
+CONFIG:class Settings(BaseSettings) model_config=SettingsConfigDict(env_file=".env",env_prefix="APP_") @lru_cache def get_settings()
+BACKGROUND:try:loop=asyncio.get_running_loop() except RuntimeError:func(*args) else:loop.run_in_executor(None,partial(func,*args))
+TESTING:@pytest.fixture async def test_async(client) await client.get @patch("module.func")
+EXCEPTION:try:operation() except SpecificError as e:logger.error("event",error=str(e),error_type=type(e).__name__) raise
+REQUEST_STATE:request.state.user_id getattr(request.state,"user_id",None)
+
+=== ENV VARS ===
+APP_ENVIRONMENT=local|test|staging|production APP_DEBUG=true|false APP_LOG_LEVEL=DEBUG|INFO|WARNING|ERROR APP_LOG_FORMAT=json|console APP_API_PREFIX=/api/v1 APP_CORS_ALLOW_ORIGINS=["http://localhost:3000"] APP_ALLOWED_HOSTS=["*"]
+SECURITY_RATE_LIMIT_ENABLED=true SECURITY_RATE_LIMIT_PER_MINUTE=60 SECURITY_RATE_LIMIT_PER_HOUR=1000 SECURITY_RATE_LIMIT_BURST=10 SECURITY_MAX_UPLOAD_SIZE=52428800 SECURITY_MAX_REQUEST_SIZE=1048576 SECURITY_BLOCK_NULL_BYTES=true SECURITY_ENABLE_HSTS=false SECURITY_ENABLE_CSP=false SECURITY_TRUST_PROXY_HEADERS=false SECURITY_TRUSTED_PROXIES=["127.0.0.1","::1"]
+SECURITY_REDIS_ENABLED=false SECURITY_REDIS_URL=redis://localhost:6379/0 SECURITY_JWT_SECRET= SECURITY_JWT_ALGORITHM=HS256 SECURITY_JWT_EXPIRY_MINUTES=60
+SECURITY_ENABLE_GEO_BLOCKING=false SECURITY_GEOIP_DATABASE_PATH= SECURITY_ENABLE_CIRCUIT_BREAKER=false SECURITY_ENABLE_DDOS_PROTECTION=false SECURITY_ENABLE_PROMETHEUS=false SECURITY_ENABLE_ALERTING=false SECURITY_ALERT_RATE_LIMIT_THRESHOLD=100 SECURITY_ALERT_AUTH_FAILURE_THRESHOLD=50
+SECURITY_ALERT_TEAMS_WEBHOOK= SECURITY_ALERT_EMAIL_HOST= SECURITY_ALERT_EMAIL_PORT=587 SECURITY_ALERT_EMAIL_USERNAME= SECURITY_ALERT_EMAIL_PASSWORD= SECURITY_ALERT_EMAIL_FROM= SECURITY_ALERT_EMAIL_RECIPIENTS= SECURITY_ALERT_EMAIL_USE_SSL=false SECURITY_ALERT_EMAIL_USE_TLS=true
+
+=== COMMANDS ===
+RUN_DEV:uvicorn app.main:app --factory --host 0.0.0.0 --port 8000 --reload
+RUN_PROD_UVICORN:uvicorn app.main:app --factory --host 0.0.0.0 --port 8000
+RUN_PROD_GUNICORN:gunicorn app.main:app --factory --workers 4 --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:8000
+INSTALL:pip install -e ".[dev]" pip install -e ".[phase2]" pip install -e ".[phase3]" pip install -e ".[security]"
+TEST:pytest pytest --cov=app pytest -v pytest -k "pattern" pytest tests/test_health.py
+LINT:ruff check src tests|black src tests|mypy src
+
+=== GIT STATUS ===
+BRANCH:main COMMITS:10d790e(adding repo details) 2169588(Opensourcing the template)
+MODIFIED:CHANGELOG.md RELEASE_CHECKLIST.md docs/integrations/alerting.md src/app/core/config.py src/app/core/decorators.py src/app/core/logging.py src/app/core/middleware.py src/app/integrations/alerting.py src/app/middleware/advanced.py src/app/middleware/auth.py src/app/middleware/monitoring.py src/app/middleware/rate_limit.py src/app/middleware/security.py src/app/services/health.py tests/conftest.py tests/integrations/test_alerting.py tests/integrations/test_alerting_middleware.py tests/test_lifespan.py tests/test_security_middleware.py
+
+=== TROUBLESHOOTING ===
+RATE_LIMIT_NOT_WORKING:check SECURITY_RATE_LIMIT_ENABLED=true redis connection excluded_paths logs:rate_limit.exceeded
+JWT_AUTH_FAILS:check SECURITY_JWT_SECRET matches token exp claim Bearer format public_paths PyJWT installed
+CORS_ERRORS:check APP_CORS_ALLOW_ORIGINS includes origin methods headers browser console
+ALERTS_NOT_SENDING:check SECURITY_ENABLE_ALERTING=true webhook/email config logs:alerting.* network connectivity
+HIGH_RESPONSE_TIME:middleware order database queries external APIs prometheus metrics X-Process-Time py-spy
+
+=== DEPLOYMENT CHECKLIST ===
+APP_ENVIRONMENT=production APP_DEBUG=false SECURITY_JWT_SECRET=strong-secret APP_CORS_ALLOW_ORIGINS=specific APP_ALLOWED_HOSTS=specific APP_LOG_FORMAT=json SECURITY_ENABLE_HSTS=true(with HTTPS) redis for distributed rate limiting alerting integrations health checks reverse proxy(nginx,traefik) monitoring(Prometheus,Grafana) log aggregation(ELK,Loki)
+
+END_REFERENCE

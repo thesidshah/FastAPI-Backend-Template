@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import functools
-from typing import Any, Callable, TypeVar, cast
+from collections.abc import Callable
+from typing import Any, TypeVar, cast
 
 import structlog
 
@@ -21,7 +22,8 @@ def with_logger(cls_or_func: type[T] | F) -> type[T] | F:
         The logger name is automatically set to the fully qualified class name.
 
     For functions:
-        Adds a 'logger' attribute to the function that can be accessed within the function.
+        Adds a 'logger' attribute to the function
+        that can be accessed within the function.
         The logger name is automatically set to the fully qualified function name.
 
     Example usage with a class:

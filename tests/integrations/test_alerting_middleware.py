@@ -13,13 +13,11 @@ from __future__ import annotations
 
 import time
 from typing import Any
-from unittest.mock import AsyncMock, Mock
+from unittest.mock import Mock
 
 import pytest
+from app.middleware.monitoring import AlertingMiddleware
 from fastapi import FastAPI, Response
-from fastapi.testclient import TestClient
-
-from src.app.middleware.monitoring import AlertingMiddleware
 
 
 class TestAlertingMiddlewareThresholds:
@@ -78,7 +76,8 @@ class TestAlertingMiddlewareThresholds:
             dispatched_alerts.append(payload)
 
         middleware = AlertingMiddleware(
-            app, alert_threshold={"rate_limit": 3, "auth_failures": 2}
+            app,
+            alert_threshold={"rate_limit": 3, "auth_failures": 2},
         )
         middleware.alert_dispatcher.dispatch = capture_dispatch
 
@@ -198,7 +197,8 @@ class TestAlertingMiddlewareCooldown:
             dispatched_alerts.append(payload)
 
         middleware = AlertingMiddleware(
-            app, alert_threshold={"rate_limit": 1, "auth_failures": 1}
+            app,
+            alert_threshold={"rate_limit": 1, "auth_failures": 1},
         )
         middleware.alert_dispatcher.dispatch = capture_dispatch
 
@@ -250,7 +250,7 @@ class TestAlertingMiddlewareStatusCodeHandling:
         mock_request.method = "GET"
         mock_request.client.host = "127.0.0.1"
 
-        async def mock_call_next(request):
+        async def mock_call_next(_request):
             return Response(status_code=429)
 
         await middleware.dispatch(mock_request, mock_call_next)
@@ -279,7 +279,7 @@ class TestAlertingMiddlewareStatusCodeHandling:
         mock_request.method = "GET"
         mock_request.client.host = "127.0.0.1"
 
-        async def mock_call_next(request):
+        async def mock_call_next(_request):
             return Response(status_code=401)
 
         await middleware.dispatch(mock_request, mock_call_next)
@@ -308,7 +308,7 @@ class TestAlertingMiddlewareStatusCodeHandling:
         mock_request.method = "GET"
         mock_request.client.host = "127.0.0.1"
 
-        async def mock_call_next(request):
+        async def mock_call_next(_request):
             return Response(status_code=413)
 
         await middleware.dispatch(mock_request, mock_call_next)
@@ -334,7 +334,7 @@ class TestAlertingMiddlewareStatusCodeHandling:
         mock_request.method = "GET"
         mock_request.client.host = "127.0.0.1"
 
-        async def mock_call_next(request):
+        async def mock_call_next(_request):
             return Response(status_code=200)
 
         await middleware.dispatch(mock_request, mock_call_next)
@@ -445,7 +445,7 @@ class TestAlertingMiddlewareCounterReset:
 class TestAlertingMiddlewareLogging:
     """Test structured logging."""
 
-    def test_critical_log_emitted_on_alert(self, caplog):
+    def test_critical_log_emitted_on_alert(self, _caplog):
         """Test that critical log is emitted when alert is sent."""
         app = FastAPI()
         dispatched_alerts: list[dict[str, Any]] = []
@@ -517,7 +517,7 @@ class TestAlertingMiddlewareEdgeCases:
 
         expected_response = Response(content=b'{"message":"success"}', status_code=200)
 
-        async def mock_call_next(request):
+        async def mock_call_next(_request):
             return expected_response
 
         response = await middleware.dispatch(mock_request, mock_call_next)

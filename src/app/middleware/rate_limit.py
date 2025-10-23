@@ -8,7 +8,6 @@ from __future__ import annotations
 import hashlib
 import json
 import time
-from typing import Optional
 
 import structlog
 
@@ -73,7 +72,7 @@ if REDIS_AVAILABLE:
             key_prefix: str = "rate_limit",
             enable_user_limits: bool = True,
             user_limit_multiplier: float = 2.0,
-            excluded_paths: Optional[set] = None,
+            excluded_paths: set[str] | None = None,
         ):
             super().__init__(app)
             self.redis = redis_client
@@ -102,7 +101,9 @@ if REDIS_AVAILABLE:
             }
 
         async def dispatch(
-            self, request: Request, call_next: RequestResponseEndpoint
+            self,
+            request: Request,
+            call_next: RequestResponseEndpoint,
         ) -> Response:
             # Skip rate limiting for excluded paths
             if request.url.path in self.excluded_paths:
@@ -115,7 +116,9 @@ if REDIS_AVAILABLE:
             # Check rate limit
             try:
                 is_allowed, remaining_or_retry = await self._check_rate_limit(
-                    client_id, limit, request.url.path
+                    client_id,
+                    limit,
+                    request.url.path,
                 )
 
                 if not is_allowed:
@@ -131,7 +134,7 @@ if REDIS_AVAILABLE:
                             {
                                 "error": "Rate limit exceeded",
                                 "retry_after": remaining_or_retry,
-                            }
+                            },
                         ),
                         status_code=429,
                         headers={
@@ -139,7 +142,7 @@ if REDIS_AVAILABLE:
                             "X-RateLimit-Limit": str(limit),
                             "X-RateLimit-Remaining": "0",
                             "X-RateLimit-Reset": str(
-                                int(time.time()) + remaining_or_retry
+                                int(time.time()) + remaining_or_retry,
                             ),
                         },
                         media_type="application/json",
@@ -154,7 +157,7 @@ if REDIS_AVAILABLE:
                         "X-RateLimit-Limit": str(limit),
                         "X-RateLimit-Remaining": str(remaining_or_retry),
                         "X-RateLimit-Reset": str(int(time.time()) + self.window),
-                    }
+                    },
                 )
 
                 return response
@@ -172,7 +175,10 @@ if REDIS_AVAILABLE:
                 return await call_next(request)
 
         async def _check_rate_limit(
-            self, client_id: str, limit: int, path: str
+            self,
+            client_id: str,
+            limit: int,
+            path: str,
         ) -> tuple[bool, int]:
             """Check rate limit using Redis with Lua script."""
 
@@ -183,10 +189,18 @@ if REDIS_AVAILABLE:
             if not self._script_sha:
                 self._script_sha = await self.redis.script_load(self.LUA_SCRIPT)
 
+            script_sha = self._script_sha
+            assert script_sha is not None, "Script SHA should be loaded"
+
             try:
                 # Execute Lua script
                 result = await self.redis.evalsha(
-                    self._script_sha, 1, key, limit, self.window, now
+                    script_sha,
+                    1,
+                    key,
+                    str(limit),
+                    str(self.window),
+                    str(now),
                 )
 
                 is_allowed = bool(result[0])
@@ -194,7 +208,7 @@ if REDIS_AVAILABLE:
 
                 return is_allowed, remaining_or_retry
 
-            except redis.NoScriptError:
+            except RedisError:
                 # Script not in cache, reload it
                 self._script_sha = await self.redis.script_load(self.LUA_SCRIPT)
                 return await self._check_rate_limit(client_id, limit, path)

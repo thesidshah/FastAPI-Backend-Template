@@ -7,7 +7,6 @@ from __future__ import annotations
 import re
 import time
 from collections import defaultdict
-from typing import Dict
 
 import structlog
 from fastapi import Request, Response
@@ -20,7 +19,7 @@ logger = structlog.get_logger(__name__)
 
 # Try to import prometheus, but make it optional
 try:
-    from prometheus_client import Counter, Gauge, Histogram, generate_latest
+    from prometheus_client import Counter, Gauge, Histogram, generate_latest  # type: ignore[import-not-found]
 
     PROMETHEUS_AVAILABLE = True
 
@@ -60,7 +59,7 @@ try:
 except ImportError:
     PROMETHEUS_AVAILABLE = False
     logger.warning(
-        "prometheus_client not installed, MetricsMiddleware will not collect metrics"
+        "prometheus_client not installed, MetricsMiddleware will not collect metrics",
     )
 
 
@@ -74,7 +73,9 @@ class MetricsMiddleware(BaseHTTPMiddleware):
         self.path_patterns = self._compile_path_patterns()
 
     async def dispatch(
-        self, request: Request, call_next: RequestResponseEndpoint
+        self,
+        request: Request,
+        call_next: RequestResponseEndpoint,
     ) -> Response:
         # Skip metrics endpoint
         if request.url.path == "/metrics":
@@ -103,11 +104,15 @@ class MetricsMiddleware(BaseHTTPMiddleware):
                 path_pattern = self._get_path_pattern(request.url.path)
 
                 request_count.labels(
-                    method=request.method, path=path_pattern, status=response.status_code
+                    method=request.method,
+                    path=path_pattern,
+                    status=response.status_code,
                 ).inc()
 
-                request_duration.labels(method=request.method, path=path_pattern).observe(
-                    duration
+                request_duration.labels(
+                    method=request.method, path=path_pattern
+                ).observe(
+                    duration,
                 )
 
                 # Track security events
@@ -115,9 +120,7 @@ class MetricsMiddleware(BaseHTTPMiddleware):
                     rate_limit_hits.labels(
                         path=path_pattern,
                         client_type=(
-                            "user"
-                            if hasattr(request.state, "user_id")
-                            else "anonymous"
+                            "user" if hasattr(request.state, "user_id") else "anonymous"
                         ),
                     ).inc()
 
@@ -126,7 +129,8 @@ class MetricsMiddleware(BaseHTTPMiddleware):
 
                 if response.status_code == 403:
                     security_violations.labels(
-                        type="access_denied", severity="medium"
+                        type="access_denied",
+                        severity="medium",
                     ).inc()
 
             return response
@@ -135,7 +139,7 @@ class MetricsMiddleware(BaseHTTPMiddleware):
             if PROMETHEUS_AVAILABLE:
                 active_connections.dec()
 
-    def _compile_path_patterns(self) -> Dict[str, str]:
+    def _compile_path_patterns(self) -> dict[str, str]:
         """Compile common path patterns for grouping."""
         return {
             r"^/api/users/\d+$": "/api/users/{id}",
@@ -158,21 +162,27 @@ class AlertingMiddleware(BaseHTTPMiddleware):
     Send alerts for critical security events.
     """
 
-    def __init__(self, app: ASGIApp, alert_threshold: Dict[str, int] | None = None):
+    def __init__(self, app: ASGIApp, alert_threshold: dict[str, int] | None = None):
         super().__init__(app)
-        self.thresholds = alert_threshold or {
+        # Default thresholds
+        self.thresholds = {
             "rate_limit": 100,  # Alert after 100 rate limit hits
             "auth_failures": 50,  # Alert after 50 auth failures
             "large_payloads": 10,  # Alert after 10 large payload attempts
         }
+        # Merge custom thresholds with defaults
+        if alert_threshold:
+            self.thresholds.update(alert_threshold)
 
-        self.counters: Dict[str, int] = defaultdict(int)
-        self.last_alert: Dict[str, float] = {}
+        self.counters: dict[str, int] = defaultdict(int)
+        self.last_alert: dict[str, float] = {}
         self.alert_cooldown = 300  # 5 minutes
         self.alert_dispatcher = AlertDispatcher()
 
     async def dispatch(
-        self, request: Request, call_next: RequestResponseEndpoint
+        self,
+        request: Request,
+        call_next: RequestResponseEndpoint,
     ) -> Response:
         response = await call_next(request)
 
@@ -188,7 +198,7 @@ class AlertingMiddleware(BaseHTTPMiddleware):
 
         return response
 
-    def _check_alert(self, event_type: str, request: Request):
+    def _check_alert(self, event_type: str, request: Request) -> None:
         """Check if we should send an alert."""
 
         self.counters[event_type] += 1
@@ -202,7 +212,7 @@ class AlertingMiddleware(BaseHTTPMiddleware):
                 self.last_alert[event_type] = now
                 self.counters[event_type] = 0
 
-    def _send_alert(self, event_type: str, request: Request):
+    def _send_alert(self, event_type: str, request: Request) -> None:
         """Send alert to monitoring system."""
 
         alert_count = self.counters[event_type]
@@ -221,5 +231,5 @@ class AlertingMiddleware(BaseHTTPMiddleware):
                 "path": request.url.path,
                 "client": request.client.host if request.client else None,
                 "method": request.method,
-            }
+            },
         )

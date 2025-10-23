@@ -22,9 +22,11 @@ import asyncio
 import json
 import os
 import smtplib
+from collections.abc import Callable
+from typing import Any as _CallableAny
 from email.message import EmailMessage
 from functools import partial
-from typing import Any, Callable, Optional
+from typing import Any
 from urllib.request import Request, urlopen
 
 import structlog
@@ -70,12 +72,12 @@ class AlertDispatcher:
         self,
         *,
         teams_webhook_url: str | None = None,
-        email_config: Optional[dict[str, Any]] = None,
-        teams_sender: Optional[Callable[[str, str], None]] = None,
-        email_sender: Optional[Callable[[dict[str, Any], str, str], None]] = None,
+        email_config: dict[str, Any] | None = None,
+        teams_sender: Callable[[str, str], None] | None = None,
+        email_sender: Callable[[dict[str, Any], str, str], None] | None = None,
     ):
         self.teams_webhook_url = teams_webhook_url or os.getenv(
-            "SECURITY_ALERT_TEAMS_WEBHOOK"
+            "SECURITY_ALERT_TEAMS_WEBHOOK",
         )
 
         self.email_config = email_config or self._load_email_config()
@@ -110,14 +112,19 @@ class AlertDispatcher:
         if self.teams_webhook_url:
             message = self._build_alert_message(payload, for_email=False)
             self._run_background_task(
-                self._teams_sender, self.teams_webhook_url, message
+                self._teams_sender,
+                self.teams_webhook_url,
+                message,
             )
 
         if self.email_config:
             subject = self._build_subject(payload["event_type"])
             body = self._build_alert_message(payload, for_email=True)
             self._run_background_task(
-                self._email_sender, dict(self.email_config), subject, body
+                self._email_sender,
+                dict(self.email_config),
+                subject,
+                body,
             )
 
     def _build_subject(self, event_type: str) -> str:
@@ -159,12 +166,14 @@ class AlertDispatcher:
 
         return "\n".join(lines)
 
-    def _run_background_task(self, func: Callable, *args, **kwargs) -> None:
+    def _run_background_task(
+        self, func: Callable[..., None], *args: Any, **kwargs: Any
+    ) -> None:
         """
         Run blocking alert integrations without stalling the event loop.
 
         If called within an async context, submits the function to a thread pool.
-        Otherwise, executes synchronously.
+        Otherwise, executes synchronously. Errors are logged but not raised.
 
         Args:
             func: The function to execute
@@ -174,8 +183,16 @@ class AlertDispatcher:
         try:
             loop = asyncio.get_running_loop()
         except RuntimeError:
-            # Not in async context, run synchronously
-            func(*args, **kwargs)
+            # Not in async context, run synchronously with error handling
+            try:
+                func(*args, **kwargs)
+            except AlertDispatcherError as exc:
+                # Log but don't raise - alerts are best-effort
+                logger.error(
+                    "alerting.background_task_failed",
+                    error=str(exc),
+                    error_type=type(exc).__name__,
+                )
             return
 
         # In async context, run in thread pool executor
@@ -194,7 +211,9 @@ class AlertDispatcher:
         """
         payload = json.dumps({"text": message}).encode("utf-8")
         request = Request(
-            webhook_url, data=payload, headers={"Content-Type": "application/json"}
+            webhook_url,
+            data=payload,
+            headers={"Content-Type": "application/json"},
         )
 
         try:
@@ -202,15 +221,19 @@ class AlertDispatcher:
                 if response.status != 200:
                     error_body = response.read().decode("utf-8")
                     raise TeamsWebhookError(
-                        f"Teams webhook returned {response.status}: {error_body}"
+                        f"Teams webhook returned {response.status}: {error_body}",
                     )
                 response.read()
         except TeamsWebhookError:
             raise
         except OSError as exc:
             # Network errors, timeouts, etc.
-            logger.error("alerting.teams_failed", error=str(exc), webhook_url=webhook_url)
-            raise TeamsWebhookError(f"Failed to send Teams notification: {exc}") from exc
+            logger.error(
+                "alerting.teams_failed", error=str(exc), webhook_url=webhook_url
+            )
+            raise TeamsWebhookError(
+                f"Failed to send Teams notification: {exc}",
+            ) from exc
         except Exception as exc:
             # Catch-all for unexpected errors
             logger.error(
@@ -218,10 +241,15 @@ class AlertDispatcher:
                 error=str(exc),
                 error_type=type(exc).__name__,
             )
-            raise TeamsWebhookError(f"Unexpected error sending Teams notification: {exc}") from exc
+            raise TeamsWebhookError(
+                f"Unexpected error sending Teams notification: {exc}",
+            ) from exc
 
     def _send_email_notification(
-        self, config: dict[str, Any], subject: str, body: str
+        self,
+        config: dict[str, Any],
+        subject: str,
+        body: str,
     ) -> None:
         """
         Send alert notification via email using SMTP.
@@ -243,7 +271,9 @@ class AlertDispatcher:
         try:
             if config["use_ssl"]:
                 with smtplib.SMTP_SSL(
-                    config["host"], config["port"], timeout=10
+                    config["host"],
+                    config["port"],
+                    timeout=10,
                 ) as smtp:
                     self._smtp_login_if_needed(smtp, config)
                     smtp.send_message(msg)
@@ -281,7 +311,9 @@ class AlertDispatcher:
             raise EmailDeliveryError(f"Unexpected error sending email: {exc}") from exc
 
     def _smtp_login_if_needed(
-        self, smtp: smtplib.SMTP, config: dict[str, Any]
+        self,
+        smtp: smtplib.SMTP,
+        config: dict[str, Any],
     ) -> None:
         """
         Authenticate with SMTP server when credentials are provided.

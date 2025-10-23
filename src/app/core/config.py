@@ -58,7 +58,7 @@ class AppSettings(BaseSettings):
     cors_allow_credentials: bool = True
     allowed_hosts: list[str] = Field(default_factory=lambda: ["*"])
 
-    log_level: str = "INFO" # DEBUG, INFO, WARNING, ERROR, CRITICAL
+    log_level: str = "INFO"  # DEBUG, INFO, WARNING, ERROR, CRITICAL
     log_format: LogFormat = LogFormat.JSON
     log_include_caller: bool = False
 
@@ -67,7 +67,7 @@ class AppSettings(BaseSettings):
     enable_tracing: bool = False
     enable_metrics: bool = False
 
-    @computed_field
+    @computed_field  # type: ignore[prop-decorator]
     @property
     def docs_url(self) -> str | None:  # pragma: no cover
         return (
@@ -76,7 +76,7 @@ class AppSettings(BaseSettings):
             else None
         )
 
-    @computed_field
+    @computed_field  # type: ignore[prop-decorator]
     @property
     def redoc_url(self) -> str | None:  # pragma: no cover
         return (
@@ -85,7 +85,7 @@ class AppSettings(BaseSettings):
             else None
         )
 
-    @computed_field
+    @computed_field  # type: ignore[prop-decorator]
     @property
     def openapi_url(self) -> str | None:  # pragma: no cover - simple computed property
         return "/openapi.json"

@@ -12,7 +12,6 @@ from .config import AppSettings, LogFormat
 
 
 def _orjson_dumps(value: Any, default: Any = None) -> str:
-    # type: ignore
     # pylint: disable=no-member
     return orjson.dumps(value, default=default).decode("utf-8")
 
@@ -21,17 +20,18 @@ def _resolve_level(log_level: str) -> int:
     level = logging.getLevelName(log_level.upper())
     if isinstance(level, str):
         raise ValueError(f"Invalid log level: {log_level}")
-    return level
+    return int(level)
 
 
 def configure_logging(settings: AppSettings) -> None:
     log_level = _resolve_level(settings.log_level)
 
     timestamper: Processor = structlog.processors.TimeStamper(
-        fmt="iso", utc=True,
+        fmt="iso",
+        utc=True,
     )
 
-    shared_processors = [
+    shared_processors: list[Processor] = [
         structlog.contextvars.merge_contextvars,
         structlog.processors.add_log_level,
         structlog.stdlib.add_logger_name,
