@@ -16,13 +16,16 @@ def create_app(settings: AppSettings | None = None) -> FastAPI:
     provides several benefits:
 
     - Delayed initialization: The app is created when uvicorn calls this function
-    - Configuration flexibility: Different settings can be passed for different environments
-    - Testing support: Fresh app instances can be created for each test with custom settings
+    - Configuration flexibility: Different settings can be passed for different
+        environments
+    - Testing support: Fresh app instances can be created for each test with
+        custom settings
     - Cleaner separation: Setup logic is encapsulated in a callable factory
 
     Args:
-        settings: Optional AppSettings instance. If not provided, settings will be
-                 loaded from environment variables via get_app_settings().
+        settings: Optional AppSettings instance. If not provided,
+            settings will be
+            loaded from environment variables via get_app_settings().
 
     Returns:
         Configured FastAPI application instance ready to handle requests.
