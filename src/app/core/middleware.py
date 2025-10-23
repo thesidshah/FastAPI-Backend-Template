@@ -133,7 +133,7 @@ def register_middlewares(app: FastAPI, settings: AppSettings) -> None:
                 if REDIS_AVAILABLE:
                     import redis.asyncio as redis
 
-                    redis_client = redis.from_url(  # type: ignore[no-untyped-call]
+                    redis_client = redis.from_url(
                         security_settings.redis_url,
                         encoding="utf-8",
                         decode_responses=True,
