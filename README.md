@@ -67,10 +67,59 @@ cp .env.example .env
 
 5. Run the development server:
 ```bash
-uvicorn app.main:app --factory --host 0.0.0.0 --port 8000 --reload
+uvicorn app.main:create_app --factory --host 0.0.0.0 --port 8000 --reload
 ```
 
 Visit `http://localhost:8000/docs` for interactive API documentation.
+
+## Application Factory Pattern
+
+This project uses the **application factory pattern** for creating FastAPI instances. The `create_app()` function in [src/app/main.py](src/app/main.py) is a factory function that returns a configured FastAPI application.
+
+### Why Factory Pattern?
+
+The factory pattern provides several benefits:
+
+1. **Delayed Initialization**: The application is created when uvicorn calls the factory, not at module import time
+2. **Configuration Flexibility**: Different settings can be passed for different environments
+3. **Testing Support**: Fresh app instances can be created for each test with custom configurations
+4. **Cleaner Separation**: Setup logic is encapsulated in a reusable callable
+
+### Using the Factory
+
+**With uvicorn (recommended):**
+```bash
+# Development with auto-reload
+uvicorn app.main:create_app --factory --reload --port 8000
+
+# Production
+uvicorn app.main:create_app --factory --host 0.0.0.0 --port 8000 --workers 4
+```
+
+**With gunicorn + uvicorn workers:**
+```bash
+gunicorn app.main:create_app --factory \
+  --workers 4 \
+  --worker-class uvicorn.workers.UvicornWorker \
+  --bind 0.0.0.0:8000
+```
+
+**Creating instances programmatically (e.g., for testing):**
+```python
+from app.main import create_app
+from app.core.config import AppSettings
+
+# Create with custom settings
+test_settings = AppSettings(debug=True, environment="test")
+app = create_app(settings=test_settings)
+
+# Or use default settings
+app = create_app()
+```
+
+### Important Note
+
+The `--factory` flag tells uvicorn that `create_app` is a callable that returns a FastAPI instance. Without this flag, uvicorn would expect `create_app` to be an already-instantiated application object.
 
 ## Project Structure
 
@@ -162,6 +211,13 @@ black src tests
 mypy src
 ```
 
+### Continuous Integration
+
+- GitHub Actions workflow at `.github/workflows/ci.yml` runs on pushes and pull requests targeting `main` or `develop`.
+- The `test` matrix exercises Python 3.11 and 3.12 on both `ubuntu-latest` and `macos-latest` runners.
+- A dedicated `security` job audits dependencies with `pip-audit` and scans source code with `bandit`.
+- The `docker` job builds the image with Buildx and smoke-tests it via `docker run`; because the workflow uses `load: true`, this step requires a runner with a Docker daemon (e.g., GitHub-hosted Ubuntu). If you switch to a platform without Docker, export or push the image instead of relying on a local daemon.
+
 ### Adding New Features
 
 1. **Create a new router** in `src/app/api/routes/<feature>.py`:
@@ -248,9 +304,8 @@ APP_DEBUG=true
 
 ### Health Checks
 
-- **Liveness**: `GET /api/v1/health` - Basic health check
-- **Readiness**: `GET /api/v1/health/ready` - Checks downstream dependencies
-- **Metadata**: `GET /api/v1/health/info` - Application metadata
+- **Liveness**: `GET /api/v1/health/live` - Lightweight liveness check for orchestration platforms
+- **Readiness**: `GET /api/v1/health/ready` - Checks downstream dependencies before accepting traffic
 
 ## Deployment
 
@@ -267,7 +322,7 @@ APP_DEBUG=true
 ### Running with Gunicorn
 
 ```bash
-gunicorn app.main:app --factory \
+gunicorn app.main:create_app --factory \
   --workers 4 \
   --worker-class uvicorn.workers.UvicornWorker \
   --bind 0.0.0.0:8000
@@ -275,19 +330,24 @@ gunicorn app.main:app --factory \
 
 ### Docker Deployment
 
-Example Dockerfile:
+Build and run with Docker:
+
+```bash
+# Build the image
+docker build -t fastapi-starter:latest .
+
+# Run the container
+docker run -d -p 8000:8000 --name fastapi-app fastapi-starter:latest
+
+# Test the health endpoint
+curl http://localhost:8000/api/v1/health/live
+```
+
+The included [Dockerfile](Dockerfile) uses a multi-stage build with the factory pattern:
 
 ```dockerfile
-FROM python:3.11-slim
-
-WORKDIR /app
-
-COPY pyproject.toml .
-RUN pip install .
-
-COPY src/ ./src/
-
-CMD ["uvicorn", "app.main:app", "--factory", "--host", "0.0.0.0", "--port", "8000"]
+# Run application using factory pattern
+CMD ["uvicorn", "app.main:create_app", "--factory", "--host", "0.0.0.0", "--port", "8000"]
 ```
 
 ## Advanced Features

@@ -104,5 +104,5 @@ jobs:
       run: |
         docker run -d -p 8000:8000 --name test-app fastapi-starter:latest
         sleep 5
-        curl -f http://localhost:8000/api/v1/health || exit 1
+        curl -f http://localhost:8000/api/v1/health/live || exit 1
         docker stop test-app

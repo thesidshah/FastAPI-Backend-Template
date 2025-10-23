@@ -51,7 +51,8 @@ EXPOSE 8000
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-    CMD python -c "import requests; requests.get('http://localhost:8000/api/v1/health', timeout=2)"
+    CMD python -c "import requests; requests.get('http://localhost:8000/api/v1/health/live', timeout=2)"
 
-# Run application
-CMD ["uvicorn", "app.main:app", "--factory", "--host", "0.0.0.0", "--port", "8000"]
+# Run application using factory pattern
+# The --factory flag tells uvicorn that create_app is a callable that returns a FastAPI instance
+CMD ["uvicorn", "app.main:create_app", "--factory", "--host", "0.0.0.0", "--port", "8000"]
