@@ -38,7 +38,7 @@ echo ""
 
 # Upgrade pip
 echo "Upgrading pip..."
-pip install --upgrade pip -q
+pip install --upgrade "pip>=25.2.1" -q
 echo "✓ pip upgraded"
 echo ""
 

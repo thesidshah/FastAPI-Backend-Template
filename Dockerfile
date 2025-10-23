@@ -16,7 +16,7 @@ COPY pyproject.toml README.md ./
 COPY src ./src
 
 # Install dependencies and the project itself
-RUN pip install --no-cache-dir --upgrade pip && \
+RUN pip install --no-cache-dir --upgrade "pip>=25.2.1" && \
     pip install --no-cache-dir hatchling && \
     pip install --no-cache-dir .
 
