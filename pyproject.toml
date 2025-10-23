@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "fastapi-production-starter"
-version = "1.0.0"
+version = "1.0.1"
 description = "Production-ready FastAPI starter template with security, observability, and modern Python best practices built-in."
 readme = "README.md"
 authors = [{ name = "Siddhant Shah" }]
@@ -67,10 +67,10 @@ security = [
 ]
 
 [project.urls]
-homepage = "https://github.com/thesidshah/fastapi-production-starter"
-repository = "https://github.com/thesidshah/fastapi-production-starter"
-documentation = "https://github.com/thesidshah/fastapi-production-starter#readme"
-issues = "https://github.com/thesidshah/fastapi-production-starter/issues"
+homepage = "https://github.com/thesidshah/FastAPI-Backend-Template"
+repository = "https://github.com/thesidshah/FastAPI-Backend-Template"
+documentation = "https://github.com/thesidshah/FastAPI-Backend-Template#readme"
+issues = "https://github.com/thesidshah/FastAPI-Backend-Template/issues"
 
 [tool.hatch.metadata]
 allow-direct-references = true

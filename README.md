@@ -41,8 +41,8 @@ A production-ready FastAPI starter kit following modern Python best practices. B
 
 1. Clone the repository:
 ```bash
-git clone <your-repo-url>
-cd <repo-name>
+git clone https://github.com/thesidshah/FastAPI-Backend-Template
+cd FastAPI-Backend-Template
 ```
 
 2. Create and activate a virtual environment:
