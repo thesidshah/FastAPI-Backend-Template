@@ -37,13 +37,13 @@ This project and everyone participating in it is governed by our Code of Conduct
 1. Fork the repository on GitHub
 2. Clone your fork locally:
    ```bash
-   git clone https://github.com/YOUR_USERNAME/PROJECT_NAME.git
-   cd PROJECT_NAME
+   git clone https://github.com/thesidshah/FastAPI-Backend-Template.git
+   cd FastAPI-Backend-Template
    ```
 
 3. Add the upstream repository:
    ```bash
-   git remote add upstream https://github.com/ORIGINAL_OWNER/PROJECT_NAME.git
+   git remote add upstream https://github.com/ORIGINAL_OWNER/FastAPI-Backend-Template.git
    ```
 
 4. Create a virtual environment:

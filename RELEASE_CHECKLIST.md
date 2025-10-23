@@ -63,7 +63,7 @@ git init
 git add .
 git commit -m "feat: initial release v1.0.0"
 git branch -M main
-git remote add origin https://github.com/YOUR_USERNAME/fastapi-production-starter.git
+git remote add origin https://github.com/thesidshah/fastapi-production-starter.git
 git push -u origin main
 ```
 
@@ -195,7 +195,7 @@ We're excited to release the first version of FastAPI Production Starter - a pro
 ### 📦 Installation
 
 \`\`\`bash
-git clone https://github.com/YOUR_USERNAME/fastapi-production-starter.git
+git clone https://github.com/thesidshah/fastapi-production-starter.git
 cd fastapi-production-starter
 pip install -e ".[dev]"
 \`\`\`
