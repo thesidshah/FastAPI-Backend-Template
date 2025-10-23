@@ -210,7 +210,7 @@ if REDIS_AVAILABLE:
 
             except RedisError:
                 # Script not in cache, reload it
-                self._script_sha = await self.redis.script_load(self.LUA_SCRIPT)  
+                self._script_sha = await self.redis.script_load(self.LUA_SCRIPT)
                 return await self._check_rate_limit(client_id, limit, path)
 
         def _get_client_id(self, request: Request) -> str:
