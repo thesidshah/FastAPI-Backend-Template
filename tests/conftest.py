@@ -29,6 +29,7 @@ async def async_client(app: FastAPI) -> AsyncGenerator[AsyncClient, Any]:
     async with LifespanManager(app) as manager:
         transport = ASGITransport(app=manager.app)
         async with AsyncClient(
-            transport=transport, base_url="http://testserver",
+            transport=transport,
+            base_url="http://testserver",
         ) as client:
             yield client
