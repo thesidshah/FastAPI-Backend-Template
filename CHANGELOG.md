@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- Async SQLAlchemy integration with example routes, dependencies, and tests
+
+### Fixed
+- Fixed import path error in alerting integration tests (changed from `src.app.integrations.alerting` to `app.integrations.alerting`)
+- Fixed error handling in `AlertDispatcher._run_background_task` to properly catch and log exceptions in synchronous contexts
+- Fixed async test fixture in `conftest.py` that had duplicate yield statements causing test failures
+- Fixed `AlertingMiddleware` threshold merging to properly combine custom thresholds with defaults instead of replacing them
+
+### Planned
+- WebSocket support examples
+- Background task patterns (Celery, ARQ)
+- GraphQL integration example
+- Message queue integration examples
+- Caching layer examples
+- OpenTelemetry integration
+- Additional authentication providers (OAuth2, OIDC)
+
 ## [1.0.0] - 2025-10-22
 
 ### Added
@@ -58,29 +78,3 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Environment-based configuration
 - Production deployment examples
 - CI/CD ready structure
-
-## [Unreleased]
-
-### Added
-- Async SQLAlchemy integration with example routes, dependencies, and tests
-
-### Fixed
-- Fixed import path error in alerting integration tests (changed from `src.app.integrations.alerting` to `app.integrations.alerting`)
-- Fixed error handling in `AlertDispatcher._run_background_task` to properly catch and log exceptions in synchronous contexts
-- Fixed async test fixture in `conftest.py` that had duplicate yield statements causing test failures
-- Fixed `AlertingMiddleware` threshold merging to properly combine custom thresholds with defaults instead of replacing them
-
-### Planned
-- WebSocket support examples
-- Background task patterns (Celery, ARQ)
-- GraphQL integration example
-- Message queue integration examples
-- Caching layer examples
-- OpenTelemetry integration
-- Additional authentication providers (OAuth2, OIDC)
-
----
-
-## Version History
-
-- **1.0.0** (2025-10-22) - Initial public release
