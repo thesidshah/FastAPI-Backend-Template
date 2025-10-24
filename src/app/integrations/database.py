@@ -23,7 +23,6 @@ def _build_engine_kwargs(settings: AppSettings) -> dict[str, Any]:
     url = make_url(settings.database_url)
     kwargs: dict[str, Any] = {
         "echo": settings.database_echo,
-        "future": True,
     }
 
     if url.get_backend_name() == "sqlite":
