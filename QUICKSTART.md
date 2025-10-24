@@ -218,6 +218,7 @@ pip install -e ".[phase3]"
 - [README.md](README.md) - Full documentation
 - [CONTRIBUTING.md](CONTRIBUTING.md) - Contribution guidelines
 - [SECURITY.md](SECURITY.md) - Security best practices
+- [Async database integration](docs/integrations/database.md) - End-to-end SQLAlchemy example
 - [docs/](docs/) - Additional documentation
 
 ## Common Issues

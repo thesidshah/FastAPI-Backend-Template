@@ -15,6 +15,7 @@ A production-ready FastAPI starter kit following modern Python best practices. B
 - **Centralized configuration** using `pydantic-settings` and `.env`
 - **Health & readiness checks** with baseline metadata endpoints
 - **Comprehensive testing** with pytest + httpx async client
+- **Async database integration** with SQLAlchemy example ([docs](docs/integrations/database.md))
 
 ### Security & Monitoring
 - **Rate limiting** with sliding window algorithm
