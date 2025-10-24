@@ -22,10 +22,9 @@ async def test_lifespan_creates_schema(async_client) -> None:
 
 @pytest.mark.asyncio
 async def test_dependency_yields_session() -> None:
-    async for session in get_async_session():
-        result = await session.execute(select(1))
-        assert result.scalar_one() == 1
-        break
+    session = await anext(get_async_session())
+    result = await session.execute(select(1))
+    assert result.scalar_one() == 1
 
 
 @pytest.mark.asyncio
