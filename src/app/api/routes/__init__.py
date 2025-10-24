@@ -10,7 +10,7 @@ def build_api_router(_: AppSettings) -> APIRouter:
     router = APIRouter()
     router.include_router(meta_router)
     router.include_router(
-        database_example_router, prefix="/examples", tags=["Examples"]
+        database_example_router, prefix="/examples", tags=["Examples"],
     )
     router.include_router(health_router, prefix="/health", tags=["Health"])
     return router

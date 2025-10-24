@@ -6,9 +6,9 @@ from contextlib import AbstractAsyncContextManager, asynccontextmanager
 import structlog
 from fastapi import FastAPI
 
-from .config import AppSettings
 from ..integrations.database import init_database, shutdown_database
 from ..services.database_example import create_example_schema
+from .config import AppSettings
 
 
 def build_lifespan(

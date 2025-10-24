@@ -1,27 +1,29 @@
 from __future__ import annotations
 
 import pytest
-from sqlalchemy import inspect, select
-
 from app.dependencies.database import get_async_session
 from app.integrations.database import get_engine
 from app.services.database_example import ExampleItem
+from sqlalchemy import inspect, select
 
 
 @pytest.mark.asyncio
-async def test_lifespan_creates_schema(async_client) -> None:
+async def test_lifespan_creates_schema(async_client) -> None:  # noqa: ARG001
+    """Test that database schema is created during app lifespan startup."""
     engine = get_engine()
 
     async with engine.begin() as connection:
         has_table = await connection.run_sync(
-            lambda sync_conn: inspect(sync_conn).has_table(ExampleItem.__tablename__)
+            lambda sync_conn: inspect(sync_conn).has_table(ExampleItem.__tablename__),
         )
 
     assert has_table is True
 
 
 @pytest.mark.asyncio
-async def test_dependency_yields_session() -> None:
+async def test_dependency_yields_session(async_client) -> None:  # noqa: ARG001
+    """Test that get_async_session dependency yields a working session."""
+    # The async_client fixture initializes the database through the app's lifespan
     session = await anext(get_async_session())
     result = await session.execute(select(1))
     assert result.scalar_one() == 1
@@ -46,7 +48,7 @@ async def test_example_route_crud_flow(async_client) -> None:
     item_id = created_item["id"]
 
     get_response = await async_client.get(
-        f"/api/v1/examples/database-example/{item_id}"
+        f"/api/v1/examples/database-example/{item_id}",
     )
     assert get_response.status_code == 200
     assert get_response.json() == created_item
