@@ -67,6 +67,10 @@ class AppSettings(BaseSettings):
     enable_tracing: bool = False
     enable_metrics: bool = False
 
+    database_url: str = "sqlite+aiosqlite:///./app.db"
+    database_pool_size: int = Field(default=5, ge=1)
+    database_echo: bool = False
+
     @computed_field  # type: ignore[prop-decorator]
     @property
     def docs_url(self) -> str | None:  # pragma: no cover

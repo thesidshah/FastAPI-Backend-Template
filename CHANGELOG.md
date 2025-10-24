@@ -61,6 +61,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Async SQLAlchemy integration with example routes, dependencies, and tests
+
 ### Fixed
 - Fixed import path error in alerting integration tests (changed from `src.app.integrations.alerting` to `app.integrations.alerting`)
 - Fixed error handling in `AlertDispatcher._run_background_task` to properly catch and log exceptions in synchronous contexts
@@ -68,7 +71,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fixed `AlertingMiddleware` threshold merging to properly combine custom thresholds with defaults instead of replacing them
 
 ### Planned
-- Database integration examples (SQLAlchemy, async)
 - WebSocket support examples
 - Background task patterns (Celery, ARQ)
 - GraphQL integration example
