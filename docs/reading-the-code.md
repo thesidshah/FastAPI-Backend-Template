@@ -1,6 +1,8 @@
-# Code reading
+# Code Reading Guide
 
-This document is a guide to help you understand the structure of the Commission Management System (CMS) backend codebase.
+This document is a quick-start guide to help you understand the structure of the FastAPI Production Starter Template codebase.
+
+> **For comprehensive backend architecture understanding**, see **[BACKEND_GUIDE.md](BACKEND_GUIDE.md)** which covers architecture, components, security, database, logging, and deployment in depth. This document focuses on practical "how to get started" instructions.
 
 # Table of Contents
 - [Quick Start](#quick-start)
@@ -21,8 +23,8 @@ uv sync
 # Set up environment variables
 cp .env.example .env  # Edit with your configuration
 
-# Run the application
-uvicorn src.app.main:app --reload
+# Run the application (using factory pattern)
+uvicorn app.main:create_app --factory --reload
 
 # Access the API documentation
 # Open http://localhost:8000/docs in your browser
@@ -104,11 +106,11 @@ Common environment variables include:
 
 ### Running the application
 
-To run the application locally for development, you can use `uvicorn`:
+To run the application locally for development, use `uvicorn` with the factory pattern:
 ```bash
-uvicorn src.app.main:app --reload
+uvicorn app.main:create_app --factory --reload
 ```
-This will start a development server on `http://localhost:8000` that automatically reloads when you make changes to the code.
+This will start a development server on `http://localhost:8000` that automatically reloads when you make changes to the code. The `--factory` flag tells uvicorn that `create_app` is a callable that returns a FastAPI instance.
 
 **Accessing API Documentation:**
 FastAPI automatically generates interactive API documentation:

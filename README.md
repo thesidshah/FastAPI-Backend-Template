@@ -394,9 +394,15 @@ Built with:
 - [Structlog](https://www.structlog.org/) - Structured logging
 - [Uvicorn](https://www.uvicorn.org/) - ASGI server
 
+## Documentation
+
+For comprehensive understanding of the backend architecture:
+
+- **[Backend Guide](docs/BACKEND_GUIDE.md)** - Complete guide covering architecture, components, security, database, logging, and deployment
+- **Additional Docs**: Check the `/docs` directory for other documentation
+
 ## Support
 
-- **Documentation**: Check the `/docs` directory
 - **Issues**: Report bugs via GitHub Issues
 - **Discussions**: Join GitHub Discussions for questions
 

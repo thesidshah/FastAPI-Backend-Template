@@ -6,6 +6,19 @@ Guide for building AI agent systems on top of the FastAPI Backend Template.
 
 This document outlines patterns and best practices for integrating AI agents, LLM-powered features, and autonomous agent systems into this FastAPI backend template. The template's modular architecture, security features, and observability make it well-suited for production AI agent deployments.
 
+## Backend Documentation
+
+For comprehensive understanding of the FastAPI backend architecture that underlies these AI agent patterns, see **[docs/BACKEND_GUIDE.md](docs/BACKEND_GUIDE.md)**. That guide covers:
+
+- Architecture overview and component design
+- Factory pattern, middleware pipeline, configuration management
+- Security implementation (authentication, rate limiting, security headers)
+- Database integration with SQLAlchemy 2.0 async
+- Logging, observability, and request tracing
+- Deployment and production operations
+
+The patterns in this document build upon the backend architecture described in the Backend Guide.
+
 ## Table of Contents
 
 - [Architecture Patterns](#architecture-patterns)
