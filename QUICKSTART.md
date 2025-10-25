@@ -295,33 +295,95 @@ git commit -m "feat: add new feature"
 
 ## Production Deployment
 
-### Environment Variables
+### Quick Production Setup
 
-Set these in production:
+For single-server production deployment:
 
+1. **Set production environment variables** (`.env` or export):
 ```bash
 APP_ENVIRONMENT=production
 APP_DEBUG=false
 APP_LOG_FORMAT=json
-SECURITY_JWT_SECRET=<your-secret>
+SECURITY_JWT_SECRET=$(openssl rand -hex 32)
 SECURITY_ENABLE_HSTS=true
+APP_CORS_ALLOW_ORIGINS=["https://yourapp.com"]
 ```
 
-### Run with Gunicorn
-
+2. **Install scaling dependencies**:
 ```bash
-pip install gunicorn
-gunicorn app.main:app --factory \
-  --workers 4 \
-  --worker-class uvicorn.workers.UvicornWorker \
-  --bind 0.0.0.0:8000
+pip install -e ".[scaling]"
 ```
 
-### Deploy with Docker
-
+3. **Run with Gunicorn** (Level 2 scaling):
 ```bash
-docker-compose -f docker-compose.yml up -d
+gunicorn app.main:create_app --factory -c gunicorn.conf.py
 ```
+
+Or use the included production compose file:
+```bash
+docker-compose -f deployment/docker-compose.prod.yml up -d
+```
+
+### Scaling Your Deployment
+
+The backend includes a **progressive 4-level scaling architecture**. Choose based on your traffic:
+
+**Level 1: Multi-Worker** (10-50K req/sec) - Config only
+```bash
+# No extra dependencies needed
+uvicorn app.main:create_app --factory --workers 4 --port 8000
+```
+
+**Level 2: Gunicorn** (50-100K req/sec) - Process management
+```bash
+# Install scaling dependencies
+pip install -e ".[scaling]"
+
+# Run with included config
+gunicorn app.main:create_app --factory -c gunicorn.conf.py
+```
+
+**Level 3: Background Tasks** - Async work
+```bash
+# Start RQ workers for long-running tasks
+docker-compose up -d worker
+
+# Or manually
+rq worker default --url redis://localhost:6379/1
+```
+
+**Level 4: Horizontal Scaling** (100K+ req/sec) - Multi-node
+```bash
+# Kubernetes deployment
+pip install -e ".[k8s]"
+python -m deployment.plugins.kubernetes deploy --namespace production
+
+# OR Docker Swarm deployment
+pip install -e ".[swarm]"
+python -m deployment.plugins.swarm deploy --stack-name myapp
+```
+
+📖 **Complete Guides**:
+- [Scaling Overview](docs/scaling/README.md) - All 4 levels explained
+- [Backend Guide: Scaling](docs/BACKEND_GUIDE.md#phase-4-scaling-architecture-) - Detailed architecture
+- [Load Testing](docs/scaling/load-testing.md) - Measure performance
+- [Troubleshooting](docs/scaling/troubleshooting.md) - Common issues
+
+### Production Checklist
+
+Before deploying to production:
+
+- [ ] Set `APP_ENVIRONMENT=production`
+- [ ] Generate and set strong `SECURITY_JWT_SECRET`
+- [ ] Configure `APP_CORS_ALLOW_ORIGINS` with actual domains
+- [ ] Set `APP_DEBUG=false`
+- [ ] Use `APP_LOG_FORMAT=json` for log aggregation
+- [ ] Enable HSTS: `SECURITY_ENABLE_HSTS=true`
+- [ ] Set up database with proper credentials
+- [ ] Configure Redis for sessions/caching (Phase 2+)
+- [ ] Set up health check monitoring
+- [ ] Configure backup and disaster recovery
+- [ ] Review [SECURITY.md](SECURITY.md) recommendations
 
 ## Getting Help
 

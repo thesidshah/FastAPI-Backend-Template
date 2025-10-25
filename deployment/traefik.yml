@@ -1,0 +1,157 @@
+# Traefik v2 configuration for FastAPI backend (Level 4: Horizontal Scaling)
+#
+# Traefik is a modern HTTP reverse proxy and load balancer with:
+# - Automatic service discovery (Docker, Kubernetes)
+# - Built-in Let's Encrypt SSL
+# - Dynamic configuration
+# - Metrics and monitoring
+#
+# Usage with Docker Compose:
+#   docker-compose -f docker-compose.traefik.yml up -d
+#
+# Usage with Docker Swarm:
+#   docker stack deploy -c docker-compose.traefik.yml traefik
+
+# Static configuration
+global:
+  checkNewVersion: true
+  sendAnonymousUsage: false
+
+# Entry points (ports)
+entryPoints:
+  web:
+    address: ":80"
+    # Redirect HTTP to HTTPS
+    http:
+      redirections:
+        entryPoint:
+          to: websecure
+          scheme: https
+
+  websecure:
+    address: ":443"
+    http:
+      tls:
+        certResolver: letsencrypt
+        domains:
+          - main: api.example.com
+            sans:
+              - "*.api.example.com"
+
+  metrics:
+    address: ":8082"
+
+# Certificate resolvers (Let's Encrypt)
+certificatesResolvers:
+  letsencrypt:
+    acme:
+      email: admin@example.com
+      storage: /letsencrypt/acme.json
+      # Use staging for testing
+      # caServer: "https://acme-staging-v02.api.letsencrypt.org/directory"
+      httpChallenge:
+        entryPoint: web
+
+# API and Dashboard
+api:
+  dashboard: true
+  insecure: false  # Require authentication in production
+
+# Metrics
+metrics:
+  prometheus:
+    entryPoint: metrics
+    addEntryPointsLabels: true
+    addServicesLabels: true
+
+# Access logs
+accessLog:
+  filePath: "/var/log/traefik/access.log"
+  format: json
+  fields:
+    headers:
+      defaultMode: keep
+      names:
+        User-Agent: keep
+        X-Request-ID: keep
+
+# Providers
+providers:
+  # Docker provider
+  docker:
+    endpoint: "unix:///var/run/docker.sock"
+    exposedByDefault: false
+    network: traefik-public
+    watch: true
+
+  # File provider for additional routes
+  file:
+    directory: "/etc/traefik/dynamic"
+    watch: true
+
+# Dynamic configuration (labels for services)
+# -------------------------------------------
+# Apply these labels to your FastAPI service in docker-compose.yml:
+#
+# labels:
+#   - "traefik.enable=true"
+#   - "traefik.http.routers.fastapi-backend.rule=Host(`api.example.com`)"
+#   - "traefik.http.routers.fastapi-backend.entrypoints=websecure"
+#   - "traefik.http.routers.fastapi-backend.tls.certresolver=letsencrypt"
+#   - "traefik.http.services.fastapi-backend.loadbalancer.server.port=8000"
+#
+#   # Load balancer settings
+#   - "traefik.http.services.fastapi-backend.loadbalancer.sticky.cookie=true"
+#   - "traefik.http.services.fastapi-backend.loadbalancer.healthcheck.path=/api/v1/health/ready"
+#   - "traefik.http.services.fastapi-backend.loadbalancer.healthcheck.interval=10s"
+#
+#   # Rate limiting
+#   - "traefik.http.middlewares.api-ratelimit.ratelimit.average=100"
+#   - "traefik.http.middlewares.api-ratelimit.ratelimit.burst=200"
+#   - "traefik.http.routers.fastapi-backend.middlewares=api-ratelimit"
+#
+#   # Security headers
+#   - "traefik.http.middlewares.security-headers.headers.stsSeconds=31536000"
+#   - "traefik.http.middlewares.security-headers.headers.stsIncludeSubdomains=true"
+#   - "traefik.http.middlewares.security-headers.headers.stsPreload=true"
+#   - "traefik.http.middlewares.security-headers.headers.frameDeny=true"
+#   - "traefik.http.middlewares.security-headers.headers.contentTypeNosniff=true"
+#   - "traefik.http.routers.fastapi-backend.middlewares=security-headers"
+
+# Example docker-compose.yml with Traefik
+# ----------------------------------------
+# version: '3.8'
+#
+# networks:
+#   traefik-public:
+#     external: true
+#
+# services:
+#   traefik:
+#     image: traefik:v2.10
+#     command:
+#       - "--configFile=/etc/traefik/traefik.yml"
+#     ports:
+#       - "80:80"
+#       - "443:443"
+#       - "8080:8080"  # Dashboard
+#     volumes:
+#       - /var/run/docker.sock:/var/run/docker.sock:ro
+#       - ./deployment/traefik.yml:/etc/traefik/traefik.yml:ro
+#       - ./letsencrypt:/letsencrypt
+#       - ./logs/traefik:/var/log/traefik
+#     networks:
+#       - traefik-public
+#
+#   fastapi-backend:
+#     image: my-fastapi-backend:latest
+#     deploy:
+#       replicas: 3
+#     labels:
+#       - "traefik.enable=true"
+#       - "traefik.http.routers.api.rule=Host(`api.example.com`)"
+#       - "traefik.http.routers.api.entrypoints=websecure"
+#       - "traefik.http.routers.api.tls.certresolver=letsencrypt"
+#       - "traefik.http.services.api.loadbalancer.server.port=8000"
+#     networks:
+#       - traefik-public

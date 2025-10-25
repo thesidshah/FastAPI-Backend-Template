@@ -16,6 +16,7 @@ A production-ready FastAPI starter kit following modern Python best practices. B
 - **Health & readiness checks** with baseline metadata endpoints
 - **Comprehensive testing** with pytest + httpx async client
 - **Async database integration** with SQLAlchemy example ([docs](docs/integrations/database.md))
+- **Progressive scaling architecture** from single worker to enterprise-level ([docs](docs/scaling/README.md))
 
 ### Security & Monitoring
 - **Rate limiting** with sliding window algorithm
@@ -370,6 +371,49 @@ pip install -e ".[phase3]"
 ```
 
 Enables Prometheus metrics and GeoIP blocking capabilities.
+
+### Phase 4: Multi-Level Scaling Architecture ⚡
+
+**NEW**: Progressive scaling from development to enterprise-level production traffic.
+
+Install scaling dependencies:
+```bash
+# Core scaling (RQ, Gunicorn, monitoring)
+pip install -e ".[scaling]"
+
+# With Kubernetes deployment plugin
+pip install -e ".[k8s]"
+
+# With Docker Swarm deployment plugin
+pip install -e ".[swarm]"
+
+# Everything for production scaling
+pip install -e ".[all-scaling]"
+```
+
+**Four Progressive Scaling Levels:**
+
+1. **Level 1: Multi-Worker** - Use multiple CPU cores (10-50K req/sec)
+2. **Level 2: Gunicorn** - Production process management with auto-restart (50-100K req/sec)
+3. **Level 3: Background Tasks** - Offload long-running work with RQ task queue
+4. **Level 4: Horizontal Scaling** - Multi-node deployment with K8s or Swarm (100K+ req/sec)
+
+**Start simple, scale as needed:**
+```bash
+# Development: Single worker
+uvicorn app.main:create_app --factory --reload
+
+# Production: Multi-worker with Gunicorn
+gunicorn app.main:create_app --factory -c gunicorn.conf.py
+
+# Deploy to Kubernetes
+python -m deployment.plugins.kubernetes deploy --namespace production
+
+# Deploy to Docker Swarm
+python -m deployment.plugins.swarm deploy --stack-name myapp
+```
+
+📖 **[Complete Scaling Guide](docs/scaling/README.md)** - Comprehensive documentation for all 4 levels
 
 ### All Security Features
 

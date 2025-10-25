@@ -54,3 +54,9 @@ examples/
 
 # Development files
 README_ORIGINAL.md
+
+# Deployment files (not needed in image)
+deployment/
+*.yml
+*.yaml
+docker-compose*.yml

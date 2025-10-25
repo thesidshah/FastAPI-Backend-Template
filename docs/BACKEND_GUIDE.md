@@ -2552,25 +2552,249 @@ app.add_middleware(GZIPMiddleware, minimum_size=1000)
 **CDN for static assets**:
 Upload static files to CDN, not served by API.
 
-### Scaling Strategies
+### Phase 4: Scaling Architecture ⚡
 
-**Vertical scaling** (increase resources):
-- Increase worker count
-- Add more CPU/memory to pods
-- Upgrade database instance
+**NEW**: Progressive multi-level scaling from development to enterprise production.
 
-**Horizontal scaling** (add instances):
-- Increase Kubernetes replicas
-- Auto-scaling based on CPU/memory
-- Load balancer distributes traffic
+The backend now includes a comprehensive scaling architecture that follows the project's "start minimal, grow as needed" philosophy. Choose the appropriate level based on your traffic requirements:
 
-**Database scaling**:
-- Read replicas for read-heavy workloads
-- Connection pooling (already implemented)
-- Query optimization
-- Caching layer (Redis)
+#### Overview: Four Scaling Levels
 
-**Auto-scaling example** (Kubernetes):
+```
+Level 1: Multi-Worker Uvicorn    →  10-50K req/sec   (Configuration only)
+Level 2: Gunicorn + Workers       →  50-100K req/sec  (Process management)
+Level 3: Background Tasks (RQ)    →  Async work       (Task queue)
+Level 4: Horizontal Scaling       →  100K+ req/sec    (Multi-node)
+```
+
+#### Level 1: Multi-Worker Uvicorn
+
+**When to use**: You need to utilize multiple CPU cores on a single machine.
+
+**Installation**: No additional dependencies required.
+
+**Setup**:
+```bash
+# Development: Single worker with reload
+uvicorn app.main:create_app --factory --reload
+
+# Production: Multiple workers
+uvicorn app.main:create_app --factory --workers 4 --host 0.0.0.0 --port 8000
+```
+
+**Worker calculation**:
+- I/O-bound workload: `workers = CPU cores × 2`
+- CPU-bound workload: `workers = CPU cores`
+
+**Limitations**:
+- No process management (workers don't auto-restart)
+- Can't run with `--reload` flag (conflicts with `--workers`)
+- In-memory state not shared across workers (use Redis)
+
+**Benefits**:
+- Zero configuration changes
+- Immediate performance improvement
+- Simple to understand and debug
+
+📖 **[Level 1 Complete Guide](docs/scaling/level1-multi-worker.md)**
+
+#### Level 2: Gunicorn Process Management
+
+**When to use**: You need production-grade process management with health monitoring and graceful restarts.
+
+**Installation**:
+```bash
+pip install -e ".[scaling]"
+```
+
+**Setup**:
+```bash
+# Use included configuration
+gunicorn app.main:create_app --factory -c gunicorn.conf.py
+```
+
+**Key features**:
+- Worker health monitoring and auto-restart
+- Graceful shutdown and zero-downtime reloads
+- Worker recycling (prevents memory leaks)
+- Pre-fork worker model
+
+**Configuration** (`gunicorn.conf.py`):
+```python
+workers = 4  # Or auto-calculated: multiprocessing.cpu_count() * 2 + 1
+worker_class = "uvicorn.workers.UvicornWorker"
+timeout = 30
+graceful_timeout = 30
+max_requests = 1000  # Restart worker after N requests
+max_requests_jitter = 100
+keepalive = 5
+```
+
+**Operations**:
+```bash
+# Graceful reload (zero downtime)
+kill -HUP <gunicorn-master-pid>
+
+# Or with Docker
+docker-compose kill -s HUP web
+```
+
+**Benefits**:
+- Production-ready reliability
+- Automatic failure recovery
+- Zero-downtime deployments
+- Industry-standard solution
+
+📖 **[Level 2 Complete Guide](docs/scaling/level2-gunicorn.md)**
+
+#### Level 3: Background Task Processing
+
+**When to use**: You have long-running operations that shouldn't block request-response cycles.
+
+**Installation**:
+```bash
+pip install -e ".[scaling]"
+```
+
+**Setup**: Uses Redis Queue (RQ) for simplicity and alignment with ruthless simplicity philosophy.
+
+**Configuration** (`.env`):
+```bash
+ENABLE_BACKGROUND_TASKS=true
+TASK_BROKER_URL=redis://localhost:6379/1
+TASK_RESULT_BACKEND=redis://localhost:6379/2
+```
+
+**Define tasks** (`src/app/tasks/example_tasks.py`):
+```python
+from app.services.tasks import register_task
+
+@register_task("send_email")
+def send_email_task(to: str, subject: str, body: str) -> dict:
+    # Task implementation
+    send_email(to, subject, body)
+    return {"status": "sent", "to": to}
+```
+
+**Enqueue tasks** (in your API endpoint):
+```python
+from app.dependencies.services import get_task_service
+
+@router.post("/users/{user_id}/welcome")
+async def send_welcome_email(
+    user_id: int,
+    task_service = Depends(get_task_service)
+):
+    task_id = await task_service.enqueue_task(
+        "send_email",
+        to=user.email,
+        subject="Welcome!",
+        body="Welcome to our service"
+    )
+    return {"task_id": task_id}
+```
+
+**Start workers**:
+```bash
+# Using Docker Compose
+docker-compose up -d worker
+
+# Or manually
+rq worker default --url redis://localhost:6379/1
+```
+
+**Monitor tasks**:
+```bash
+# RQ Dashboard (included)
+rq-dashboard --url redis://localhost:6379/1
+# Visit http://localhost:9181
+```
+
+**Benefits**:
+- Offloads long-running work from request handlers
+- Simple, battle-tested task queue
+- Built-in monitoring dashboard
+- Retry logic and failure handling
+
+📖 **[Level 3 Complete Guide](docs/scaling/level3-background-tasks.md)**
+
+#### Level 4: Horizontal Scaling
+
+**When to use**: Single-server capacity exhausted, need to scale across multiple nodes.
+
+**Installation**:
+```bash
+# Kubernetes plugin
+pip install -e ".[k8s]"
+
+# Docker Swarm plugin
+pip install -e ".[swarm]"
+
+# Both
+pip install -e ".[all-scaling]"
+```
+
+**Kubernetes Deployment**:
+```bash
+# Using included plugin
+python -m deployment.plugins.kubernetes deploy \
+  --namespace production \
+  --replicas 5 \
+  --image my-registry.com/api:v1.0
+
+# Scale up/down
+python -m deployment.plugins.kubernetes scale --replicas 10
+
+# Status
+python -m deployment.plugins.kubernetes status
+```
+
+**Docker Swarm Deployment**:
+```bash
+# Using included plugin
+python -m deployment.plugins.swarm deploy \
+  --stack-name myapp \
+  --replicas 5
+
+# Scale
+python -m deployment.plugins.swarm scale --replicas 10
+
+# Status
+python -m deployment.plugins.swarm status
+```
+
+**Load Balancer Configuration** (nginx example from `deployment/nginx.conf`):
+```nginx
+upstream backend {
+    least_conn;  # Better than round-robin for async apps
+    server node1:8000 max_fails=3 fail_timeout=30s;
+    server node2:8000 max_fails=3 fail_timeout=30s;
+    server node3:8000 max_fails=3 fail_timeout=30s;
+}
+
+server {
+    listen 80;
+    location / {
+        proxy_pass http://backend;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    }
+
+    # Health check endpoint
+    location /health {
+        proxy_pass http://backend/api/v1/health/ready;
+    }
+}
+```
+
+**Key considerations**:
+- **Shared state**: Use Redis for sessions, caching, rate limits
+- **Session affinity**: Not required (stateless design)
+- **Database connections**: Adjust pool size per worker per node
+- **Health checks**: Both liveness (`/health/live`) and readiness (`/health/ready`)
+
+**Auto-scaling example** (Kubernetes HPA):
 ```yaml
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
@@ -2582,7 +2806,7 @@ spec:
     kind: Deployment
     name: fastapi-backend
   minReplicas: 3
-  maxReplicas: 10
+  maxReplicas: 20
   metrics:
   - type: Resource
     resource:
@@ -2590,7 +2814,52 @@ spec:
       target:
         type: Utilization
         averageUtilization: 70
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 300  # Wait 5 min before scaling down
 ```
+
+**Benefits**:
+- Linear scalability (add nodes = add capacity)
+- Geographic distribution possible
+- High availability through redundancy
+- Auto-scaling based on metrics
+
+📖 **[Level 4 Complete Guide](docs/scaling/level4-horizontal-scaling.md)**
+
+#### Scaling Decision Matrix
+
+| Traffic Level | Scaling Level | Setup Complexity | Monthly Cost* | Recommendation |
+|--------------|---------------|------------------|---------------|----------------|
+| < 10K req/sec | Level 1 (Multi-worker) | Very Low | $20-50 | Single VPS |
+| 10-50K req/sec | Level 2 (Gunicorn) | Low | $50-200 | Single dedicated server |
+| 50-100K req/sec | Level 2 + Level 3 | Medium | $200-500 | Add task workers |
+| 100K-500K req/sec | Level 4 (3-5 nodes) | High | $500-2000 | Kubernetes/Swarm |
+| > 500K req/sec | Level 4 (10+ nodes) | Very High | $2000+ | Enterprise setup |
+
+*Cost estimates are approximate and vary by provider
+
+#### Additional Resources
+
+- 📖 **[Scaling Overview](docs/scaling/README.md)** - Complete introduction to all scaling levels
+- 📊 **[Load Testing Guide](docs/scaling/load-testing.md)** - How to measure and validate scaling
+- 🔧 **[Troubleshooting](docs/scaling/troubleshooting.md)** - Common scaling issues and solutions
+- 🎯 **[Migration Paths](docs/scaling/README.md#migration-paths)** - Moving between scaling levels
+
+#### Philosophy Alignment
+
+This scaling architecture embodies our core principles:
+
+- **Ruthless Simplicity**: Start with Level 1 (configuration only), add complexity only when needed
+- **Trust in Emergence**: Complex scalability emerges from simple components (workers + load balancer)
+- **Modular Design**: Each level is independent, can be adopted separately
+- **Progressive Enhancement**: Clear migration path as requirements grow
 
 ### How to Extend
 

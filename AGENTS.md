@@ -981,6 +981,467 @@ async def test_full_conversation_flow(client, mock_user):
 - Sandbox tool executions
 - Never expose raw LLM API keys to frontend
 
+## Scaling AI Agent Systems
+
+**NEW**: Leverage Phase 4 scaling architecture for high-traffic AI agent deployments.
+
+AI agent systems have unique scaling challenges beyond traditional web applications: long-running LLM API calls, stateful conversations, and resource-intensive operations. This section shows how to apply the backend's [Phase 4 scaling architecture](docs/BACKEND_GUIDE.md#phase-4-scaling-architecture-) to AI agent workloads.
+
+### Unique Challenges of Scaling AI Agents
+
+1. **Long-running requests**: LLM API calls can take 5-30 seconds (or more with tool use)
+2. **Conversation state**: Multi-turn conversations require session management
+3. **Rate limits**: External LLM API quotas and rate limits
+4. **Cost management**: Per-request costs for LLM inference
+5. **Streaming responses**: Real-time token streaming for better UX
+6. **Tool execution**: Async operations that extend request duration
+
+### Scaling Strategy by Traffic Level
+
+#### Low Traffic (< 100 concurrent users)
+
+**Recommended**: Level 1 (Multi-Worker) + Async I/O
+
+```bash
+# Single server, 4 workers
+uvicorn app.main:create_app --factory --workers 4 --port 8000
+```
+
+**Why it works**:
+- FastAPI's async/await efficiently handles many concurrent LLM API calls
+- Workers utilize multiple CPU cores for non-I/O work
+- Simple to deploy and monitor
+
+**Optimization tips**:
+- Use streaming responses to provide immediate feedback
+- Cache common prompts and responses in Redis (Phase 2)
+- Set aggressive timeouts (30-60s) to prevent hung requests
+
+#### Medium Traffic (100-1000 concurrent users)
+
+**Recommended**: Level 2 (Gunicorn) + Level 3 (Background Tasks)
+
+```bash
+# gunicorn.conf.py
+workers = 8  # Adjust based on CPU cores
+timeout = 90  # Allow time for LLM API calls
+graceful_timeout = 120  # Extra time for cleanup
+```
+
+**Key patterns**:
+
+**1. Offload heavy operations to background tasks:**
+```python
+# API endpoint (fast response)
+@router.post("/agent/analyze")
+async def analyze_document(
+    document_id: int,
+    task_service = Depends(get_task_service)
+):
+    # Enqueue background task
+    task_id = await task_service.enqueue_task(
+        "analyze_document",
+        document_id=document_id
+    )
+
+    return {"task_id": task_id, "status": "processing"}
+
+# Background task (RQ worker)
+@register_task("analyze_document")
+def analyze_document_task(document_id: int) -> dict:
+    # Long-running LLM analysis (minutes)
+    document = load_document(document_id)
+    analysis = llm_client.analyze(document, timeout=300)
+    save_analysis(document_id, analysis)
+    return {"document_id": document_id, "analysis": analysis}
+```
+
+**2. Separate sync endpoints from async tasks:**
+```python
+# Quick interactions: Synchronous API
+POST /agent/chat          # < 10s response time
+GET /agent/history        # < 1s response time
+
+# Heavy processing: Background tasks
+POST /agent/analyze       # Returns task_id immediately
+POST /agent/summarize     # Long-running operation
+GET /tasks/{task_id}      # Check status
+```
+
+**3. Implement conversation streaming with timeout protection:**
+```python
+@router.post("/agent/chat/stream")
+async def chat_stream(message: str, session_id: str):
+    async def generate():
+        try:
+            async with asyncio.timeout(30):  # 30s timeout
+                async for chunk in agent_service.stream_response(message):
+                    yield f"data: {chunk}\n\n"
+        except asyncio.TimeoutError:
+            yield "data: [TIMEOUT] Response generation exceeded time limit\n\n"
+
+    return StreamingResponse(generate(), media_type="text/event-stream")
+```
+
+#### High Traffic (1000+ concurrent users)
+
+**Recommended**: Level 4 (Horizontal Scaling) + All Previous Levels
+
+**Architecture**:
+```
+                    ┌─────────────────┐
+                    │  Load Balancer  │
+                    │   (nginx/k8s)   │
+                    └────────┬────────┘
+                             │
+              ┌──────────────┼──────────────┐
+              │              │              │
+         ┌────▼────┐    ┌────▼────┐   ┌────▼────┐
+         │ Node 1  │    │ Node 2  │   │ Node 3  │
+         │ 8 workers│   │ 8 workers│  │ 8 workers│
+         └────┬────┘    └────┬────┘   └────┬────┘
+              │              │              │
+              └──────────────┼──────────────┘
+                             │
+                    ┌────────▼────────┐
+                    │  Shared Redis   │
+                    │  - Sessions     │
+                    │  - Cache        │
+                    │  - Task Queue   │
+                    └────────┬────────┘
+                             │
+                    ┌────────▼────────┐
+                    │  RQ Workers     │
+                    │  (10+ workers)  │
+                    └─────────────────┘
+```
+
+**Critical patterns**:
+
+**1. Shared session state (Redis):**
+```python
+# Don't: In-memory sessions (breaks with multiple nodes)
+sessions = {}  # ❌ Not shared across nodes
+
+# Do: Redis-backed sessions
+class ConversationManager:
+    def __init__(self, redis_client):
+        self.redis = redis_client
+
+    async def get_conversation(self, session_id: str) -> list:
+        data = await self.redis.get(f"conv:{session_id}")
+        return json.loads(data) if data else []
+
+    async def add_message(self, session_id: str, message: dict):
+        conv = await self.get_conversation(session_id)
+        conv.append(message)
+        await self.redis.setex(
+            f"conv:{session_id}",
+            3600,  # 1 hour TTL
+            json.dumps(conv)
+        )
+```
+
+**2. LLM API rate limit management:**
+```python
+# Distribute requests across multiple API keys
+class LLMClientPool:
+    def __init__(self, api_keys: list[str]):
+        self.clients = [AnthropicClient(key) for key in api_keys]
+        self.current_index = 0
+
+    def get_client(self) -> AnthropicClient:
+        # Round-robin across API keys
+        client = self.clients[self.current_index]
+        self.current_index = (self.current_index + 1) % len(self.clients)
+        return client
+
+# Usage
+llm_pool = LLMClientPool(settings.llm_api_keys)
+response = await llm_pool.get_client().chat(message)
+```
+
+**3. Response caching for common queries:**
+```python
+from functools import lru_cache
+import hashlib
+
+async def get_agent_response(prompt: str, context: dict) -> str:
+    # Generate cache key
+    cache_key = f"response:{hashlib.sha256(prompt.encode()).hexdigest()}"
+
+    # Check cache
+    cached = await redis.get(cache_key)
+    if cached:
+        logger.info("agent.cache_hit", prompt_hash=cache_key)
+        return cached.decode()
+
+    # Generate response
+    response = await llm_client.generate(prompt, context)
+
+    # Cache for 1 hour
+    await redis.setex(cache_key, 3600, response)
+
+    return response
+```
+
+**4. Database connection pooling adjustment:**
+```python
+# config.py
+import multiprocessing
+
+# Calculate connections per node
+workers_per_node = int(os.getenv("WORKERS", multiprocessing.cpu_count() * 2))
+nodes = int(os.getenv("NODE_COUNT", 1))
+total_workers = workers_per_node * nodes
+
+# Adjust pool size to avoid exhausting database connections
+# Typical: 100 max connections / (workers × nodes)
+database_pool_size = max(3, 100 // total_workers)
+database_max_overflow = database_pool_size * 2
+
+DATABASE_URL = (
+    f"postgresql+asyncpg://...?"
+    f"pool_size={database_pool_size}&"
+    f"max_overflow={database_max_overflow}"
+)
+```
+
+### Deployment Patterns
+
+#### Pattern 1: Dedicated Worker Pools
+
+Separate API servers from background task workers:
+
+```yaml
+# docker-compose.prod.yml
+services:
+  # API servers (handle HTTP requests)
+  api:
+    image: my-agent-api:latest
+    command: gunicorn app.main:create_app --factory -c gunicorn.conf.py
+    deploy:
+      replicas: 3
+    environment:
+      - ENABLE_BACKGROUND_TASKS=false  # Don't process tasks
+
+  # Task workers (process background jobs)
+  worker:
+    image: my-agent-api:latest
+    command: rq worker default high priority --url redis://redis:6379/1
+    deploy:
+      replicas: 10  # More workers for heavy processing
+    environment:
+      - WORKER_TYPE=background
+```
+
+#### Pattern 2: Priority Queues
+
+Prioritize interactive requests over batch processing:
+
+```python
+# High priority: Interactive chat (< 10s)
+task_service.enqueue_task(
+    "chat_response",
+    message=message,
+    queue="high"  # Processed first
+)
+
+# Normal priority: Document analysis (< 1 min)
+task_service.enqueue_task(
+    "analyze_document",
+    document_id=doc_id,
+    queue="default"
+)
+
+# Low priority: Batch summarization (can take hours)
+task_service.enqueue_task(
+    "batch_summarize",
+    document_ids=doc_ids,
+    queue="low"
+)
+```
+
+Start workers for each queue:
+```bash
+# High-priority workers (more of these)
+rq worker high --url redis://redis:6379/1 &
+rq worker high --url redis://redis:6379/1 &
+rq worker high --url redis://redis:6379/1 &
+
+# Normal priority workers
+rq worker default --url redis://redis:6379/1 &
+
+# Low priority workers
+rq worker low --url redis://redis:6379/1 &
+```
+
+#### Pattern 3: Kubernetes Auto-Scaling for AI Workloads
+
+```yaml
+# deployment/plugins/kubernetes/manifests/hpa.yaml
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: agent-api-hpa
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: agent-api
+  minReplicas: 3
+  maxReplicas: 20
+  metrics:
+  # Scale based on request queue depth
+  - type: Pods
+    pods:
+      metric:
+        name: http_request_queue_depth
+      target:
+        type: AverageValue
+        averageValue: "10"  # Queue depth per pod
+
+  # Also scale on memory (LLM responses can be large)
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 70
+
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 60  # Quick scale-up
+    scaleDown:
+      stabilizationWindowSeconds: 600  # Slow scale-down (10 min)
+```
+
+### Monitoring AI Agent Performance
+
+**Key metrics to track**:
+
+```python
+from prometheus_client import Histogram, Counter, Gauge
+
+# LLM API call duration
+llm_request_duration = Histogram(
+    'agent_llm_request_duration_seconds',
+    'Time spent calling LLM API',
+    ['model', 'endpoint']
+)
+
+# Token usage (cost tracking)
+llm_tokens_used = Counter(
+    'agent_llm_tokens_total',
+    'Total tokens consumed',
+    ['model', 'token_type']  # token_type: prompt, completion
+)
+
+# Conversation length
+conversation_length = Histogram(
+    'agent_conversation_length',
+    'Number of messages in conversation'
+)
+
+# Background task queue depth
+task_queue_depth = Gauge(
+    'agent_task_queue_depth',
+    'Number of pending background tasks',
+    ['priority']
+)
+
+# Cache hit rate
+cache_hits = Counter('agent_cache_hits_total', 'Cache hits')
+cache_misses = Counter('agent_cache_misses_total', 'Cache misses')
+```
+
+**Alert thresholds**:
+- LLM API call duration p95 > 30s → Investigate slow responses
+- Task queue depth > 1000 → Add more workers
+- Cache hit rate < 30% → Optimize caching strategy
+- Token usage spike > 2x baseline → Check for abuse or bugs
+
+### Cost Optimization at Scale
+
+**1. Implement aggressive caching:**
+```python
+# Cache identical prompts
+# Cache system prompts (rarely change)
+# Cache tool descriptions and examples
+```
+
+**2. Use smaller models for simple tasks:**
+```python
+class ModelRouter:
+    async def route_request(self, message: str, complexity: str) -> str:
+        if complexity == "simple":
+            # Use faster, cheaper model
+            return await self.claude_haiku.generate(message)
+        elif complexity == "complex":
+            # Use more capable model
+            return await self.claude_opus.generate(message)
+```
+
+**3. Batch requests when possible:**
+```python
+# Instead of 100 individual API calls
+for doc in documents:
+    summary = await llm.summarize(doc)
+
+# Batch into fewer calls
+batch_prompt = "Summarize each document:\n" + "\n\n".join(documents)
+summaries = await llm.summarize_batch(batch_prompt)
+```
+
+### Testing at Scale
+
+**Load testing agent endpoints**:
+
+```python
+# tests/load/agent_locustfile.py
+from locust import HttpUser, task, between
+
+class AgentUser(HttpUser):
+    wait_time = between(1, 3)  # Simulate user think time
+
+    @task(3)  # 3x weight
+    def chat_message(self):
+        self.client.post("/api/v1/agent/chat", json={
+            "message": "Explain quantum computing",
+            "session_id": self.session_id
+        })
+
+    @task(1)
+    def analyze_document(self):
+        self.client.post("/api/v1/agent/analyze", json={
+            "document_id": 123
+        })
+
+    def on_start(self):
+        # Authenticate and get session
+        response = self.client.post("/api/v1/auth/login", json={
+            "username": "test_user",
+            "password": "test_pass"
+        })
+        self.session_id = response.json()["session_id"]
+```
+
+Run load test:
+```bash
+# Simulate 100 users, ramp up 10 users/second
+locust -f tests/load/agent_locustfile.py \
+  --host https://api.example.com \
+  --users 100 \
+  --spawn-rate 10
+```
+
+### Additional Resources
+
+- 📖 **[Phase 4 Scaling Architecture](docs/BACKEND_GUIDE.md#phase-4-scaling-architecture-)** - Backend scaling foundation
+- 📖 **[Level 3: Background Tasks](docs/scaling/level3-background-tasks.md)** - Task queue patterns
+- 📖 **[Load Testing Guide](docs/scaling/load-testing.md)** - Measure and validate performance
+- 📖 **[Troubleshooting](docs/scaling/troubleshooting.md)** - Common scaling issues
+
 ## Resources
 
 - [FastAPI Documentation](https://fastapi.tiangolo.com/)
